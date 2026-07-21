@@ -152,13 +152,18 @@ KNOWN_NONPORTABLE_FAILURES = {
 #     (`long` is 4 bytes), so the overflow checks it exercises don't apply
 #   - sub-overflow.c's abort() and issue202.c's empty-struct ABI hit
 #     further Windows JIT/calling-convention gaps in the vendored MIR
-# Separately (handled structurally below, not listed here): any test that
-# #includes real mingw-w64 system headers fails outright on Windows.
-# Those headers gate behavior on compiler-identification macros/builtins
-# (__declspec, __cdecl, ...) c2mir doesn't implement -- e.g. vadefs.h has
-# a literal `#error "VARARGS not implemented for this compiler"` fallback
-# c2mir hits. That's a real c2mir/mingw incompatibility, not something
-# this repo's build wiring can paper over.
+# Separately (handled structurally below, not listed here) are two classes
+# of pre-existing Windows-only gap that the c2mir header fix does NOT close:
+#   - mingw-w64 headers c2mir still can't parse (e.g. math.h's GCC extended
+#     inline-asm statements): the failure's diagnostics reference the mingw
+#     header dir ("any-windows-any").
+#   - programs that DO parse but then hit MIR's eager JIT symbol resolver on
+#     Windows: mingw's static inline stdio helpers reference libmingwex-only
+#     symbols (__local_stdio_printf_options), and c2mir lowers va_start to a
+#     call to __va_start, neither of which MIR can resolve against the loaded
+#     UCRT DLLs. Both surface as "can not load symbol ...".
+# These are pre-existing upstream MIR limitations, not something this repo's
+# build wiring can paper over.
 KNOWN_WINDOWS_FAILURES = {
     "packages/compiler/c-tests/mir/issue279.mir",
     "packages/compiler/c-tests/new/va-ld-stack.c",
@@ -203,18 +208,41 @@ def cmd_test_legacy(args):
     current_test = None
     diagnostics = []
     unexpected = []
+    failed = 0
     for line in result.stdout.splitlines():
         match = re.search(r"([^\s:]+\.(?:c|mir)):", line)
         if match:
             current_test = match.group(1)
             diagnostics = []
         if "FAIL" in line:
+            failed += 1
             listed = current_test and any(k in current_test for k in known)
+            # A Windows failure is a known gap if it either couldn't parse a
+            # mingw header, or parsed but hit MIR's eager JIT symbol resolver
+            # on a mingw/varargs helper it can't provide (see comment above).
             mingw_header_gap = IS_WINDOWS and any("any-windows-any" in d for d in diagnostics)
-            if not listed and not mingw_header_gap:
-                unexpected.append(line)
+            mingw_jit_gap = IS_WINDOWS and any(
+                sym in d
+                for d in diagnostics
+                for sym in ("__local_stdio_printf_options", "__va_start")
+            )
+            if not listed and not mingw_header_gap and not mingw_jit_gap:
+                unexpected.append(f"{current_test}: {line.strip()}")
         else:
             diagnostics.append(line)
+
+    # Surface a clear pass/total so the CI log shows progress at a glance.
+    # On Windows some failures are known-gap exemptions (see the comment on
+    # KNOWN_WINDOWS_FAILURES and the structural checks above), so "passed"
+    # counts every test file that isn't currently failing.
+    m = re.search(r"Tests (\d+)", result.stdout)
+    total = int(m.group(1)) if m else failed
+    exempted = failed - len(unexpected)
+    summary = f"legacy c-tests: {total - failed}/{total} test files passed"
+    if failed:
+        summary += f" ({exempted} known-gap exemption(s), {len(unexpected)} unexpected)"
+    print(summary)
+
     if unexpected:
         sys.exit(f"legacy c-tests: {len(unexpected)} unexpected failure(s):\n" + "\n".join(unexpected))
 
@@ -231,11 +259,12 @@ def smoke_test():
     mc_bin = BUILD_DIR / f"mc{EXE}"
     tmp = Path(tempfile.mkdtemp(prefix="mc-smoke-"))
     try:
-        # c2mir can't parse real mingw-w64 system headers on Windows (see
-        # KNOWN_WINDOWS_FAILURES above) -- upstream's own sieve.c smoke
-        # test works around this by hand-declaring libc functions instead
-        # of #include <stdio.h>; do the same here so this still exercises
-        # a real compile+run on every platform.
+        # On Windows, <stdio.h> pulls in mingw's static inline stdio helpers,
+        # which reference libmingwex-only symbols MIR's JIT can't resolve; like
+        # upstream's own sieve.c we hand-declare printf for the stdout-checking
+        # cases. Real system-header support (which the c2mir header fix enables)
+        # is exercised by real_header_c below and, extensively, by the legacy
+        # c-tests.
         preamble = "void printf (const char *, ...);\n" if IS_WINDOWS else "#include <stdio.h>\n"
 
         hello_c = tmp / "hello.c"
@@ -262,6 +291,15 @@ def smoke_test():
 
         out = mc("run", str(args_c), "--", "one", "two", capture_output=True, text=True, check=True).stdout
         assert out.strip().splitlines()[-1] == "arg 2: two", "args test failed"
+
+        # Real system-header compile+run. <string.h> is one of many headers the
+        # c2mir header fix makes usable on Windows (unlike <stdio.h>, it drags
+        # in no unresolved JIT helpers). Checked via exit code, so no stdout
+        # wiring is needed and it runs identically on every platform.
+        real_header_c = tmp / "real_header.c"
+        real_header_c.write_text('#include <string.h>\nint main(void){ return (int) strlen("abcd"); }\n')
+        rc = mc(str(real_header_c), capture_output=True, text=True).returncode
+        assert rc == 4, f"real system-header compile/run failed: rc={rc}"
 
         hello_bin = tmp / f"hello{EXE}"
         mc("build", str(hello_c), "-c", "-o", str(hello_bin.with_suffix(".bmir")), check=True)
