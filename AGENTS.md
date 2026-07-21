@@ -41,8 +41,7 @@ future packages (linter, formatter) will join it under `packages/`.
 - Match surrounding code and avoid unrelated formatting changes.
 - Keep `packages/compiler` re-vendors as their own commit (via
   `scripts/update-compiler.py`), separate from `mc`-side changes.
-- Use [Conventional Commits](https://www.conventionalcommits.org/) for commits,
-  such as `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, and `chore:`.
+- Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 - Run the smallest relevant test before committing; use `just test-legacy` for
   compiler changes and `just test-toolchain` for `mc` CLI changes. Legacy
   tests always gate before toolchain tests — `just test` enforces that order.

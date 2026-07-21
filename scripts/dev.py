@@ -231,12 +231,19 @@ def smoke_test():
     mc_bin = BUILD_DIR / f"mc{EXE}"
     tmp = Path(tempfile.mkdtemp(prefix="mc-smoke-"))
     try:
+        # c2mir can't parse real mingw-w64 system headers on Windows (see
+        # KNOWN_WINDOWS_FAILURES above) -- upstream's own sieve.c smoke
+        # test works around this by hand-declaring libc functions instead
+        # of #include <stdio.h>; do the same here so this still exercises
+        # a real compile+run on every platform.
+        preamble = "void printf (const char *, ...);\n" if IS_WINDOWS else "#include <stdio.h>\n"
+
         hello_c = tmp / "hello.c"
-        hello_c.write_text('#include <stdio.h>\nint main(void){printf("Hello World\\n");return 0;}\n')
+        hello_c.write_text(f'{preamble}int main(void){{printf("Hello World\\n");return 0;}}\n')
 
         args_c = tmp / "args.c"
         args_c.write_text(
-            '#include <stdio.h>\n'
+            f'{preamble}'
             'int main(int argc,char**argv){\n'
             '  for(int i=0;i<argc;i++) printf("arg %d: %s\\n", i, argv[i]);\n'
             '  return 0;\n'
