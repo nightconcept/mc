@@ -10,14 +10,17 @@ permissions:
 
 jobs:
   unix:
+    name: ${{ matrix.name }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
             artifact: linux-x64
+            name: linux
           - os: macos-latest
             artifact: macos-arm64
+            name: macos
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7

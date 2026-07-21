@@ -54,4 +54,4 @@ python3 scripts/update-compiler.py --dry-run  # just resolve the commit, no chan
 
 ## License
 
-The mc project is licensed under the [`LGPL-2.1 LICENSE`](LICENSE).
+The mc project is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.

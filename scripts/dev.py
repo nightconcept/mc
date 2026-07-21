@@ -116,8 +116,16 @@ KNOWN_NONPORTABLE_FAILURES = {
 
 def cmd_test_legacy(args):
     c2m = BUILD_DIR / f"c2m{EXE}"
+    # Passed to `sh`, whose glob patterns treat backslash as an escape
+    # character -- Windows-style paths from Path.__str__ would garble the
+    # `$ctest_dir/$dir/*.c` globs in runtests.sh, so force forward slashes.
     result = subprocess.run(
-        ["sh", str(COMPILER_DIR / "c-tests" / "runtests.sh"), str(COMPILER_DIR / "c-tests" / "use-c2m-gen"), str(c2m)],
+        [
+            "sh",
+            (COMPILER_DIR / "c-tests" / "runtests.sh").as_posix(),
+            (COMPILER_DIR / "c-tests" / "use-c2m-gen").as_posix(),
+            c2m.as_posix(),
+        ],
         cwd=ROOT, capture_output=True, text=True,
     )
     print(result.stdout)
@@ -154,7 +162,7 @@ def smoke_test():
         )
 
         invalid_c = tmp / "invalid.c"
-        invalid_c.write_text("int main(void) { return ; }\n")  # missing return value: syntax error
+        invalid_c.write_text("int main(void) { return 0 }\n")  # missing semicolon: syntax error
 
         def mc(*a, **kw):
             kw.setdefault("cwd", tmp)
