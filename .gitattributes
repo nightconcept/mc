@@ -1,0 +1,4 @@
+# Force LF line endings on checkout for every platform. Windows git's
+# default CRLF conversion corrupts MIR's text-format parser (.mir files)
+# and produces inconsistent behavior in the vendored c-tests suite.
+* text=auto eol=lf
