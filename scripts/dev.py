@@ -62,17 +62,21 @@ def windows_system_include_dir():
     # __APPLE__/__unix__ (see init_include_dirs in c2mir.c); on Windows it
     # has none, so C programs it compiles can't find stdio.h etc. Point it
     # at zig's bundled mingw-w64 headers via the ADDITIONAL_INCLUDE_PATH
-    # hook that upstream already provides for exactly this case -- it only
-    # takes one directory, so stage the mingw headers plus mm_malloc.h
-    # (a compiler-intrinsics header mingw expects the toolchain to supply,
-    # which zig ships separately from its libc headers) together.
+    # hook that upstream already provides for exactly this case.
     out = subprocess.run([ZIG, "env"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     lib_dir = Path(re.search(r'\.lib_dir = "([^"]+)"', out).group(1))
 
-    staging = BUILD_DIR / "win-include"
-    shutil.copytree(lib_dir / "libc" / "include" / "any-windows-any", staging)
-    shutil.copy(lib_dir / "include" / "mm_malloc.h", staging / "mm_malloc.h")
-    return staging
+    mingw_dir = lib_dir / "libc" / "include" / "any-windows-any"
+    # mm_malloc.h isn't part of mingw's own headers -- it's a compiler-
+    # intrinsics header the toolchain is expected to supply, which zig
+    # ships separately from its libc headers. malloc.h pulls it in on
+    # x86_64/i386, and ADDITIONAL_INCLUDE_PATH only takes one directory,
+    # so drop it directly into zig's (ephemeral-on-CI) mingw dir rather
+    # than staging a copy of the whole tree elsewhere.
+    mm_malloc = mingw_dir / "mm_malloc.h"
+    if not mm_malloc.exists():
+        shutil.copy(lib_dir / "include" / "mm_malloc.h", mm_malloc)
+    return mingw_dir
 
 
 def build():
