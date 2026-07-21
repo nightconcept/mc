@@ -99,7 +99,7 @@ def build():
 
     libmir = BUILD_DIR / "libmir.a"
     run([
-        "ar", "rcs", str(libmir),
+        ZIG, "ar", "rcs", str(libmir),
         str(BUILD_DIR / f"mir{OBJ}"),
         str(BUILD_DIR / f"mir-gen{OBJ}"),
         str(BUILD_DIR / "c2mir" / f"c2mir{OBJ}"),
