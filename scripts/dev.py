@@ -15,6 +15,7 @@ artifacts go in dist/ (also gitignored).
 import argparse
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -56,6 +57,18 @@ def artifact_name():
 # build
 
 
+def windows_system_include_dir():
+    # c2mir.c only knows default system header search paths on
+    # __APPLE__/__unix__ (see init_include_dirs in c2mir.c); on Windows it
+    # has none, so C programs it compiles can't find stdio.h etc. Point it
+    # at zig's bundled mingw-w64 headers via the ADDITIONAL_INCLUDE_PATH
+    # hook that upstream already provides for exactly this case.
+    out = subprocess.run([ZIG, "env"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
+    match = re.search(r'\.lib_dir = "([^"]+)"', out)
+    lib_dir = Path(match.group(1))
+    return lib_dir / "libc" / "include" / "any-windows-any"
+
+
 def build():
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
@@ -63,12 +76,16 @@ def build():
 
     include_flags = ["-I", str(COMPILER_DIR), "-I", str(COMPILER_DIR / "c2mir")]
 
-    def compile_obj(src, obj):
-        run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2"])
+    def compile_obj(src, obj, extra_flags=()):
+        run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2", *extra_flags])
+
+    c2mir_flags = []
+    if IS_WINDOWS:
+        c2mir_flags = [f'-DADDITIONAL_INCLUDE_PATH="{windows_system_include_dir().as_posix()}"']
 
     compile_obj(COMPILER_DIR / "mir.c", BUILD_DIR / f"mir{OBJ}")
     compile_obj(COMPILER_DIR / "mir-gen.c", BUILD_DIR / f"mir-gen{OBJ}")
-    compile_obj(COMPILER_DIR / "c2mir" / "c2mir.c", BUILD_DIR / "c2mir" / f"c2mir{OBJ}")
+    compile_obj(COMPILER_DIR / "c2mir" / "c2mir.c", BUILD_DIR / "c2mir" / f"c2mir{OBJ}", c2mir_flags)
 
     libmir = BUILD_DIR / "libmir.a"
     run([
