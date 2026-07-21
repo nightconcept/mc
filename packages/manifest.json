@@ -1,0 +1,12 @@
+{
+  "packages": {
+    "compiler": {
+      "source": "https://github.com/vnmakarov/mir",
+      "ref": "master",
+      "commit": null,
+      "vendored_at": null,
+      "path": "packages/compiler",
+      "note": "commit unknown: packages/compiler was moved here from a pre-existing src/ vendor copy with no git history to read the pinned commit from. Run `python3 scripts/update-compiler.py` to sync to current upstream master and populate this entry."
+    }
+  }
+}

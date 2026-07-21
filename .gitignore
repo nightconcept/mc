@@ -1,0 +1,9 @@
+*~
+\#*
+.#*
+.gdb_history
+*.log
+
+# out-of-tree build output and packaged release artifacts (see scripts/dev.py)
+/build/
+/dist/

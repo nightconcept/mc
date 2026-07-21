@@ -1,0 +1,9 @@
+pre-commit:
+  commands:
+    gate-fast:
+      run: python3 scripts/gate.py --fast
+
+pre-push:
+  commands:
+    gate-full:
+      run: python3 scripts/gate.py

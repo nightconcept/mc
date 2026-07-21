@@ -1,0 +1,43 @@
+name: mc build and test
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unix:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x64
+          - os: macos-latest
+            artifact: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v2
+      - run: just ci
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mc-${{ matrix.artifact }}
+          path: dist/mc-${{ matrix.artifact }}
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v2
+      - shell: pwsh
+        run: just ci
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mc-windows-x64
+          path: dist/mc-windows-x64.exe
+          if-no-files-found: error

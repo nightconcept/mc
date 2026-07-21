@@ -1,0 +1,44 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C/C++ (src/ is vendored TinyCC; per src/CodingStyle, tabs are filled
+# with spaces and most files indent 4 — some legacy files use 2, which
+# this can't express per-file, so don't reflow existing code to match).
+[*.{c,h}]
+indent_style = space
+indent_size = 4
+
+# Zig: `zig fmt` is authoritative (4-space, space-indented); this just
+# keeps editors consistent before a format pass runs.
+[*.zig]
+indent_style = space
+indent_size = 4
+
+# Python: PEP 8.
+[*.py]
+indent_style = space
+indent_size = 4
+
+# Makefiles require literal tabs for recipe lines.
+[{Makefile,*.mk,Makefile.*}]
+indent_style = tab
+
+# justfile recipes are conventionally space-indented.
+[{justfile,Justfile}]
+indent_style = space
+indent_size = 4
+
+# YAML/TOML: 2-space is the ecosystem norm (lefthook.yml, mise.toml).
+[*.{yml,yaml,toml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = false
