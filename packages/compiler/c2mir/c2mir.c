@@ -4364,7 +4364,9 @@ D (asm_spec) {
   node_t r, id;
 
   PTN (T_ID);
-  if (strcmp (r->u.s.s, "__asm") != 0 && strcmp (r->u.s.s, "asm") != 0) PTFAIL (T_ID);
+  if (strcmp (r->u.s.s, "__asm") != 0 && strcmp (r->u.s.s, "asm") != 0
+      && strcmp (r->u.s.s, "__asm__") != 0)
+    PTFAIL (T_ID);
   id = r;
   PT ('(');
   PTN (T_STR);
@@ -9273,7 +9275,8 @@ static void check (c2m_ctx_t c2m_ctx, node_t r, node_t context) {
       }
       ret_type = &res_type;
       if (builtin_call_p
-          && ((va_start_p && NL_LENGTH (arg_list->u.ops) != 1)
+          && ((va_start_p && NL_LENGTH (arg_list->u.ops) != 1
+               && NL_LENGTH (arg_list->u.ops) != 2)
               || (alloca_p && NL_LENGTH (arg_list->u.ops) != 1)
               || (add_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
               || (sub_overflow_p && NL_LENGTH (arg_list->u.ops) != 3)
