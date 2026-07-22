@@ -3,33 +3,26 @@
 default:
     just --list
 
+# ── build ─────────────────────────────────────────────────────────────────────
 build:
-    python3 scripts/dev.py build
-
-test-legacy:
-    python3 scripts/dev.py test legacy
-
-test-toolchain:
-    python3 scripts/dev.py test toolchain
-
-test:
-    python3 scripts/dev.py test all
-
-package:
-    python3 scripts/dev.py package
-
-ci:
-    python3 scripts/dev.py ci
+    python3 scripts/build.py
 
 clean:
-    rm -rf build dist
+    rm -rf build dist .mccache .zig-cache zig-out
 
-fmt:
-    zig fmt packages/cli/mc.zig
+package:
+    python3 scripts/package.py
 
-lint file:
-    ./build/mc lint {{file}}
+# ── test ──────────────────────────────────────────────────────────────────────
+test-legacy:
+    python3 scripts/test_legacy.py
 
+test-toolchain:
+    python3 scripts/test_toolchain.py
+
+test: test-legacy test-toolchain
+
+# ── quality gates ─────────────────────────────────────────────────────────────
 gate:
     python3 scripts/gate.py
 
@@ -38,3 +31,25 @@ gate-fast:
 
 hooks-install:
     lefthook install
+
+# ── Zig toolchain ─────────────────────────────────────────────────────────────
+fetch-tools version="18":
+    python3 scripts/fetch_tools.py --version {{version}}
+
+check:
+    zig build check
+
+fmt:
+    zig fmt packages/cli/mc.zig packages/fmt/format.zig packages/lint/lint.zig packages/lsp/lsp.zig build.zig
+
+fmt-check:
+    zig fmt --check packages/cli/mc.zig packages/fmt/format.zig packages/lint/lint.zig packages/lsp/lsp.zig build.zig
+
+lint file:
+    ./build/mc lint {{file}}
+
+# ── meta ──────────────────────────────────────────────────────────────────────
+ci:
+    just build
+    just test
+    just package

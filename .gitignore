@@ -4,6 +4,25 @@
 .gdb_history
 *.log
 
-# out-of-tree build output and packaged release artifacts (see scripts/dev.py)
+# out-of-tree build output and packaged release artifacts
 /build/
 /dist/
+
+# vendored LLVM tool binaries (prefer system PATH; populate with: just fetch-tools)
+/vendor/tools/clang-format
+/vendor/tools/clang-format.exe
+/vendor/tools/clang-tidy
+/vendor/tools/clang-tidy.exe
+/vendor/tools/clangd
+/vendor/tools/clangd.exe
+
+# LSP compile database cache
+/.mccache/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Zig build cache
+/.zig-cache/
+/zig-out/
