@@ -5,17 +5,18 @@
 ## Intent
 
 Maintain the ModC compiler toolchain with small, reviewable changes. The
-compiler is a thin `mc` frontend (Zig) around a vendored copy of MIR/c2mir;
-future packages (linter, formatter) will join it under `packages/`.
+compiler is a thin `mc` frontend (Zig) around MIR/c2mir; future packages
+(linter, formatter, LSP) live under `src/`.
 
 ## Stack
 
-- Monorepo: `packages/<name>/` holds each buildable component; root is
-  workspace tooling only (`justfile`, `mise.toml`, `scripts/`)
-- `packages/cli/mc.zig` — the `mc` CLI frontend
-- `packages/compiler/` — git submodule tracking https://github.com/vnmakarov/mir
-  (C-to-MIR compiler, c2mir)
-- `scripts/dev.py` build/test/package CLI, driven via `just` (tools pinned in `mise.toml`)
+- Monorepo: `src/<name>/` holds each first-party package; root is workspace
+  tooling only (`justfile`, `mise.toml`, `scripts/`)
+- `src/cli/mc.zig` — the `mc` CLI frontend
+- `build.zig.zon` — declares the MIR dep (nightconcept/mir `mc` branch,
+  pinned to a commit hash; update with `just update-mir <sha>`)
+- MIR sources live in the Zig global package cache (not in the repo)
+- `scripts/` — build/test/package CLI, driven via `just` (tools pinned in `mise.toml`)
 
 ## Essential Commands
 
@@ -23,20 +24,21 @@ future packages (linter, formatter) will join it under `packages/`.
 - **Gate**: `just gate-fast` (fmt + zig unit tests, runs pre-commit) or
   `just gate` (adds build + legacy + toolchain tests, runs pre-push)
 - **Build**: `just build` — out-of-tree build into `build/` (objects, libs,
-  `c2m`, `mc`); repo root and `packages/` stay clean
-- **Test legacy (vendored upstream MIR c-tests suite)**: `just test-legacy`
+  `c2m`, `mc`); repo root and `src/` stay clean
+- **Test legacy (upstream MIR c-tests suite)**: `just test-legacy`
 - **Test toolchain (mc CLI, not compilation)**: `just test-toolchain`
 - **Test both, legacy first**: `just test`
 - **Package**: `just package` — copies `build/mc` into `dist/`
-- **Format Zig**: `zig fmt packages/cli/mc.zig`
+- **Format Zig**: `zig fmt src/cli/mc.zig`
 - **Lint C**: `./build/mc lint <file.c>` after `just build`
-- **Update compiler submodule**: `just update-compiler`
+- **Update MIR**: push to nightconcept/mir `mc` branch, then
+  `just update-mir <new-commit-sha>`
 
 ## Engineering Standards
 
 - Match surrounding code and avoid unrelated formatting changes.
-- Keep `packages/compiler` submodule updates as their own commit (via
-  `just update-compiler`), separate from `mc`-side changes.
+- Keep MIR updates (via `just update-mir`) as their own commit, separate
+  from `mc`-side changes.
 - Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 - Run the smallest relevant test before committing; use `just test-legacy` for
   compiler changes and `just test-toolchain` for `mc` CLI changes. Legacy
@@ -45,4 +47,4 @@ future packages (linter, formatter) will join it under `packages/`.
 ## Spoke Index
 
 - [README](README) — project overview, installation, and usage
-- [MIR docs](packages/compiler/MIR.md) — upstream MIR/c2mir reference
+- [MIR docs](https://github.com/nightconcept/mir/blob/mc/MIR.md) — upstream MIR/c2mir reference

@@ -146,7 +146,7 @@ fn runClangFormat(
     const clang_fmt = findTool(io, "clang-format", alloc) catch {
         var buffer: [512]u8 = undefined;
         var stderr = std.Io.File.stderr().writer(io, &buffer);
-        try stderr.interface.writeAll("mc fmt: clang-format not found on PATH or vendor/tools/\nRun: just fetch-tools\n");
+        try stderr.interface.writeAll("mc fmt: clang-format not found on PATH or .tools/\nRun: just fetch-tools\n");
         try stderr.interface.flush();
         return 1;
     };
@@ -194,9 +194,14 @@ pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator) ![]const
     var dir = exe_dir;
     var attempts: u8 = 0;
     while (attempts < 5) : (attempts += 1) {
+        const tools_path = try std.fs.path.join(alloc, &.{ dir, ".tools", name });
+        defer alloc.free(tools_path);
+        if (fileExists(io, tools_path)) return alloc.dupe(u8, tools_path);
+
         const vendor_path = try std.fs.path.join(alloc, &.{ dir, "vendor", "tools", name });
         defer alloc.free(vendor_path);
         if (fileExists(io, vendor_path)) return alloc.dupe(u8, vendor_path);
+
         dir = std.fs.path.dirname(dir) orelse break;
     }
 

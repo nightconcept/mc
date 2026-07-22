@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run zig unit tests and mc CLI smoke tests."""
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -14,10 +15,10 @@ def zig_unit_tests():
         ZIG, "test",
         "--dep", "fmt", "--dep", "lint", "--dep", "lsp",
         f"-Mroot={CLI_SRC}",
-        "--dep", "toml", f"-Mfmt={ROOT / 'packages' / 'fmt' / 'format.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'packages' / 'lint' / 'lint.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'packages' / 'lsp' / 'lsp.zig'}",
-        f"-Mtoml={ROOT / 'vendor' / 'toml' / 'toml.zig'}",
+        "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
+        "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
+        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
+        f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
         "-lc",
     ])
 
@@ -25,11 +26,15 @@ def zig_unit_tests():
 def ensure_tools_available():
     if shutil.which("clang-format"):
         return
-    vendor_tools = ROOT / "vendor" / "tools"
+    # Check .tools/ populated by fetch_tools.py (CI cache or local fetch)
     exe_ext = ".exe" if IS_WINDOWS else ""
-    if (vendor_tools / f"clang-format{exe_ext}").exists():
+    local_tools = ROOT / ".tools"
+    clang_format = local_tools / f"clang-format{exe_ext}"
+    if clang_format.exists():
+        # Prepend .tools/ to PATH so mc subprocess finds the tools
+        os.environ["PATH"] = str(local_tools) + os.pathsep + os.environ.get("PATH", "")
         return
-    print("clang-format not found on PATH or vendor/tools/. Fetching LLVM tools...")
+    print("clang-format not found on PATH or .tools/. Fetching LLVM tools...")
     run([sys.executable, str(ROOT / "scripts" / "fetch_tools.py")])
 
 

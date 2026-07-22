@@ -1,0 +1,12 @@
+.{
+    .name = .mc,
+    .version = "0.16.0",
+    .dependencies = .{
+        .mir = .{
+            .url = "https://github.com/nightconcept/mir/archive/56081b99d47e027afe444615e25605f3650916d7.tar.gz",
+            .hash = "N-V-__8AAFFbBwPgb5NMVIL0MOFzTX7wTXNu3BXmcGF1Qb3l",
+        },
+    },
+    .paths = .{""},
+    .fingerprint = 0x453137f75ebae6f1,
+}

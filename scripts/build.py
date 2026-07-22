@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 from _env import (
-    BUILD_DIR, CLI_SRC, COMPILER_DIR, EXE, IS_WINDOWS, MIR_LIBS, OBJ, ROOT, ZIG, run,
+    BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, MIR_LIBS, OBJ, ROOT, ZIG, mir_dir, run,
 )
 
 
@@ -33,7 +33,8 @@ def build():
         _shutil.rmtree(BUILD_DIR)
     (BUILD_DIR / "c2mir").mkdir(parents=True)
 
-    include_flags = ["-I", str(COMPILER_DIR), "-I", str(COMPILER_DIR / "c2mir")]
+    compiler_dir = mir_dir()
+    include_flags = ["-I", str(compiler_dir), "-I", str(compiler_dir / "c2mir")]
 
     def compile_obj(src, obj, extra_flags=()):
         run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2", *extra_flags])
@@ -42,9 +43,9 @@ def build():
     if IS_WINDOWS:
         c2mir_flags = [f'-DADDITIONAL_INCLUDE_PATH="{windows_system_include_dir().as_posix()}"']
 
-    compile_obj(COMPILER_DIR / "mir.c", BUILD_DIR / f"mir{OBJ}")
-    compile_obj(COMPILER_DIR / "mir-gen.c", BUILD_DIR / f"mir-gen{OBJ}")
-    compile_obj(COMPILER_DIR / "c2mir" / "c2mir.c", BUILD_DIR / "c2mir" / f"c2mir{OBJ}", c2mir_flags)
+    compile_obj(compiler_dir / "mir.c", BUILD_DIR / f"mir{OBJ}")
+    compile_obj(compiler_dir / "mir-gen.c", BUILD_DIR / f"mir-gen{OBJ}")
+    compile_obj(compiler_dir / "c2mir" / "c2mir.c", BUILD_DIR / "c2mir" / f"c2mir{OBJ}", c2mir_flags)
 
     libmir = BUILD_DIR / "libmir.a"
     run([
@@ -56,13 +57,13 @@ def build():
 
     # Plain c2m driver
     driver_plain = BUILD_DIR / "c2mir" / f"c2mir-driver-plain{OBJ}"
-    compile_obj(COMPILER_DIR / "c2mir" / "c2mir-driver.c", driver_plain)
+    compile_obj(compiler_dir / "c2mir" / "c2mir-driver.c", driver_plain)
     run([ZIG, "cc", str(driver_plain), str(libmir), "-o", str(BUILD_DIR / f"c2m{EXE}"), *MIR_LIBS])
 
     # Renamed driver (main -> c2m_main) linked into the mc.zig frontend
     driver_renamed = BUILD_DIR / "c2mir" / f"c2mir-driver{OBJ}"
     run([
-        ZIG, "cc", "-c", str(COMPILER_DIR / "c2mir" / "c2mir-driver.c"), "-o", str(driver_renamed),
+        ZIG, "cc", "-c", str(compiler_dir / "c2mir" / "c2mir-driver.c"), "-o", str(driver_renamed),
         *include_flags, "-O2", "-Dmain=c2m_main",
     ])
 
@@ -71,10 +72,10 @@ def build():
         ZIG, "build-exe", "-O", "ReleaseSafe", f"-femit-bin=build/mc{EXE}",
         "--dep", "fmt", "--dep", "lint", "--dep", "lsp",
         f"-Mroot={CLI_SRC}",
-        "--dep", "toml", f"-Mfmt={ROOT / 'packages' / 'fmt' / 'format.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'packages' / 'lint' / 'lint.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'packages' / 'lsp' / 'lsp.zig'}",
-        f"-Mtoml={ROOT / 'vendor' / 'toml' / 'toml.zig'}",
+        "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
+        "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
+        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
+        f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
         str(driver_renamed), str(libmir), *include_flags, "-lc", *MIR_LIBS,
     ])
 

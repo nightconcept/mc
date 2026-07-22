@@ -33,23 +33,22 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
-      - name: Cache vendor tools
+      - name: Cache LLVM tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: vendor/tools
-          key: vendor-tools-${{ matrix.name }}-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+          path: .tools
+          key: llvm-tools-${{ matrix.name }}-${{ hashFiles('scripts/fetch_tools.py') }}
           restore-keys: |
-            vendor-tools-${{ matrix.name }}-
-      - name: Cache Zig compiler cache
+            llvm-tools-${{ matrix.name }}-
+      - name: Cache Zig package fetch and compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/.cache/zig
             ~/.local/share/zig
-          key: zig-cache-${{ runner.os }}-${{ hashFiles('packages/cli/mc.zig', 'packages/compiler/**') }}
+            zig-pkg
+          key: zig-cache-${{ runner.os }}-${{ hashFiles('build.zig.zon', 'src/cli/mc.zig') }}
           restore-keys: |
             zig-cache-${{ runner.os }}-
       - run: just fetch-tools
@@ -65,22 +64,21 @@ jobs:
     runs-on: windows-2025
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          submodules: true
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
-      - name: Cache vendor tools
+      - name: Cache LLVM tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: vendor/tools
-          key: vendor-tools-windows-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+          path: .tools
+          key: llvm-tools-windows-${{ hashFiles('scripts/fetch_tools.py') }}
           restore-keys: |
-            vendor-tools-windows-
-      - name: Cache Zig compiler cache
+            llvm-tools-windows-
+      - name: Cache Zig package fetch and compiler cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ~/AppData/Local/zig
-          key: zig-cache-windows-${{ hashFiles('packages/cli/mc.zig', 'packages/compiler/**') }}
+            zig-pkg
+          key: zig-cache-windows-${{ hashFiles('build.zig.zon', 'src/cli/mc.zig') }}
           restore-keys: |
             zig-cache-windows-
       - shell: pwsh

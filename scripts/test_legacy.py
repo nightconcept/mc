@@ -3,7 +3,7 @@
 import re
 import subprocess
 import sys
-from _env import BUILD_DIR, COMPILER_DIR, EXE, IS_WINDOWS, ROOT
+from _env import BUILD_DIR, EXE, IS_WINDOWS, ROOT, mir_dir
 
 # Pre-existing, architecture-specific test gaps in upstream MIR's own
 # c-tests suite (not regressions from the mc/c2mir wiring here). Unlike
@@ -12,34 +12,35 @@ from _env import BUILD_DIR, COMPILER_DIR, EXE, IS_WINDOWS, ROOT
 # SysV va_list register-offset internals (gp_offset/fp_offset) that don't
 # apply on aarch64.
 KNOWN_NONPORTABLE_FAILURES = {
-    "packages/compiler/c-tests/new/va-struct-args.c",
+    "va-struct-args.c",
 }
 
 # Pre-existing Windows x86-64/ABI/JIT gaps in upstream MIR itself (not
 # regressions from the mc/c2mir wiring here):
 KNOWN_WINDOWS_FAILURES = {
-    "packages/compiler/c-tests/mir/issue279.mir",
-    "packages/compiler/c-tests/new/va-ld-stack.c",
-    "packages/compiler/c-tests/new/va-struct-args.c",
-    "packages/compiler/c-tests/new/issue142.c",
-    "packages/compiler/c-tests/new/issue441.c",
-    "packages/compiler/c-tests/new/issue456.c",
-    "packages/compiler/c-tests/lacc/vararg-complex-1.c",
-    "packages/compiler/c-tests/lacc/long-double-function.c",
-    "packages/compiler/c-tests/new/setjmp2.c",
-    "packages/compiler/c-tests/new/mul-overflow.c",
-    "packages/compiler/c-tests/new/sub-overflow.c",
-    "packages/compiler/c-tests/new/issue202.c",
+    "issue279.mir",
+    "va-ld-stack.c",
+    "va-struct-args.c",
+    "issue142.c",
+    "issue441.c",
+    "issue456.c",
+    "vararg-complex-1.c",
+    "long-double-function.c",
+    "setjmp2.c",
+    "mul-overflow.c",
+    "sub-overflow.c",
+    "issue202.c",
 }
 
 
 def test_legacy():
     c2m = BUILD_DIR / f"c2m{EXE}"
+    compiler_dir = mir_dir()
     result = subprocess.run(
         [
             "sh",
-            (COMPILER_DIR / "c-tests" / "runtests.sh").as_posix(),
-            (COMPILER_DIR / "c-tests" / "use-c2m-gen").as_posix(),
+            (compiler_dir / "c-tests" / "runtests.sh").as_posix(),
+            (compiler_dir / "c-tests" / "use-c2m-gen").as_posix(),
             c2m.as_posix(),
         ],
         cwd=ROOT, capture_output=True, text=True,

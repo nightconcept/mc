@@ -40,17 +40,19 @@ check:
     zig build check
 
 fmt:
-    zig fmt packages/cli/mc.zig packages/fmt/format.zig packages/lint/lint.zig packages/lsp/lsp.zig build.zig
+    zig fmt src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig build.zig
 
 fmt-check:
-    zig fmt --check packages/cli/mc.zig packages/fmt/format.zig packages/lint/lint.zig packages/lsp/lsp.zig build.zig
+    zig fmt --check src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig build.zig
 
 lint file:
     ./build/mc lint {{file}}
 
 # ── meta ──────────────────────────────────────────────────────────────────────
-update-compiler:
-    git submodule update --remote packages/compiler
+# Update MIR: push changes to nightconcept/mir mc branch, get the new SHA,
+# then run: just update-mir <new-sha>
+update-mir sha:
+    mise exec -- zig fetch --save=mir https://github.com/nightconcept/mir/archive/{{sha}}.tar.gz
 
 ci:
     just build

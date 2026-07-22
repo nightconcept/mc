@@ -8,13 +8,11 @@
 /build/
 /dist/
 
-# vendored LLVM tool binaries (prefer system PATH; populate with: just fetch-tools)
-/vendor/tools/clang-format
-/vendor/tools/clang-format.exe
-/vendor/tools/clang-tidy
-/vendor/tools/clang-tidy.exe
-/vendor/tools/clangd
-/vendor/tools/clangd.exe
+# Zig package fetch cache (MIR and other fetched deps)
+/zig-pkg/
+
+# LLVM tool binaries fetched by scripts/fetch_tools.py
+/.tools/
 
 # LSP compile database cache
 /.mccache/

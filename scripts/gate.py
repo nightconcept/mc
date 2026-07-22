@@ -9,10 +9,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = Path(__file__).parent
 
 ZIG_SOURCES = [
-    "packages/cli/mc.zig",
-    "packages/fmt/format.zig",
-    "packages/lint/lint.zig",
-    "packages/lsp/lsp.zig",
+    "src/cli/mc.zig",
+    "src/fmt/format.zig",
+    "src/lint/lint.zig",
+    "src/lsp/lsp.zig",
     "build.zig",
 ]
 

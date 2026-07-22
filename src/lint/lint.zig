@@ -39,7 +39,7 @@ pub fn run(ra: RunArgs) !u8 {
     const clang_tidy = fmt_pkg.findTool(ra.io, "clang-tidy", alloc) catch {
         var buffer: [512]u8 = undefined;
         var stderr = std.Io.File.stderr().writer(ra.io, &buffer);
-        try stderr.interface.writeAll("mc lint: clang-tidy not found on PATH or vendor/tools/\nRun: just fetch-tools\n");
+        try stderr.interface.writeAll("mc lint: clang-tidy not found on PATH or .tools/\nRun: just fetch-tools\n");
         try stderr.interface.flush();
         return 1;
     };

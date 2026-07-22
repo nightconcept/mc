@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """LLVM binary fetcher script for mc (ModC).
 
-Downloads vendored clang-format, clang-tidy, and clangd binaries from LLVM
-GitHub releases into vendor/tools/.
+Downloads clang-format, clang-tidy, and clangd binaries from LLVM
+GitHub releases into .tools/ (gitignored, used by CI cache and local dev).
 """
 
 import argparse
@@ -16,7 +16,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-VENDOR_TOOLS = ROOT / "vendor" / "tools"
+TOOLS_DIR = ROOT / ".tools"
 TOOLS = ["clang-format", "clang-tidy", "clangd"]
 
 
@@ -128,8 +128,8 @@ def main():
         print("Dry run -- not downloading.")
         return
 
-    VENDOR_TOOLS.mkdir(parents=True, exist_ok=True)
-    tar_path = VENDOR_TOOLS / filename
+    TOOLS_DIR.mkdir(parents=True, exist_ok=True)
+    tar_path = TOOLS_DIR / filename
 
     print("Downloading archive...")
     req = urllib.request.Request(url, headers=_get_github_headers())
@@ -150,7 +150,7 @@ def main():
                     for tool in requested_tools:
                         target_name = f"{tool}{exe_ext}"
                         if name.endswith(f"/bin/{tool}") or name.endswith(f"/bin/{target_name}"):
-                            dest = VENDOR_TOOLS / target_name
+                            dest = TOOLS_DIR / target_name
                             print(f"  * Extracting {tool} -> {dest}")
                             f = tar.extractfile(member)
                             if f:
@@ -162,16 +162,7 @@ def main():
         if tar_path.exists():
             tar_path.unlink()
 
-    manifest_path = VENDOR_TOOLS / "manifest.json"
-    manifest_data = {
-        "note": "Populated by: python3 scripts/fetch_tools.py. Prefer system PATH tools.",
-        "llvm_tag": tag,
-        "tools": {t: {"version": tag} for t in requested_tools},
-    }
-    with open(manifest_path, "w") as f:
-        json.dump(manifest_data, f, indent=2)
-
-    print("Done. vendor/tools/manifest.json updated.")
+    print(f"Done. Tools written to .tools/")
 
 
 if __name__ == "__main__":
