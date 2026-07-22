@@ -45,11 +45,10 @@ just gate-fast       # fmt + zig unit tests (pre-commit)
 just gate            # gate-fast + build + full test suite (pre-push)
 ```
 
-To pick up new upstream MIR/c2mir commits:
+To update the compiler submodule to the latest commit:
 
 ```sh
-python3 scripts/update-compiler.py            # sync packages/compiler/ to latest master
-python3 scripts/update-compiler.py --dry-run  # just resolve the commit, no changes
+just update-compiler
 ```
 
 ## License

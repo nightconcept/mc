@@ -13,10 +13,8 @@ future packages (linter, formatter) will join it under `packages/`.
 - Monorepo: `packages/<name>/` holds each buildable component; root is
   workspace tooling only (`justfile`, `mise.toml`, `scripts/`)
 - `packages/cli/mc.zig` — the `mc` CLI frontend
-- `packages/compiler/` — vendored copy of https://github.com/vnmakarov/mir
-  (C-to-MIR compiler, c2mir); pinned commit tracked in `packages/manifest.json`
-- `scripts/update-compiler.py` — re-vendors `packages/compiler/` from
-  upstream MIR and refreshes the manifest
+- `packages/compiler/` — git submodule tracking https://github.com/vnmakarov/mir
+  (C-to-MIR compiler, c2mir)
 - `scripts/dev.py` build/test/package CLI, driven via `just` (tools pinned in `mise.toml`)
 
 ## Essential Commands
@@ -32,15 +30,13 @@ future packages (linter, formatter) will join it under `packages/`.
 - **Package**: `just package` — copies `build/mc` into `dist/`
 - **Format Zig**: `zig fmt packages/cli/mc.zig`
 - **Lint C**: `./build/mc lint <file.c>` after `just build`
-- **Update vendored compiler**: `python3 scripts/update-compiler.py` (add
-  `--ref <branch>` to pin something other than `master`, `--dry-run` to
-  just resolve the commit)
+- **Update compiler submodule**: `just update-compiler`
 
 ## Engineering Standards
 
 - Match surrounding code and avoid unrelated formatting changes.
-- Keep `packages/compiler` re-vendors as their own commit (via
-  `scripts/update-compiler.py`), separate from `mc`-side changes.
+- Keep `packages/compiler` submodule updates as their own commit (via
+  `just update-compiler`), separate from `mc`-side changes.
 - Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
 - Run the smallest relevant test before committing; use `just test-legacy` for
   compiler changes and `just test-toolchain` for `mc` CLI changes. Legacy

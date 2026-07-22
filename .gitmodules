@@ -1,0 +1,4 @@
+[submodule "packages/compiler"]
+	path = packages/compiler
+	url = https://github.com/vnmakarov/mir
+	branch = master

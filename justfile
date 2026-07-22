@@ -49,7 +49,11 @@ lint file:
     ./build/mc lint {{file}}
 
 # ── meta ──────────────────────────────────────────────────────────────────────
+update-compiler:
+    git submodule update --remote packages/compiler
+
 ci:
     just build
     just test
     just package
+

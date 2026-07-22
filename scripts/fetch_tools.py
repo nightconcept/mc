@@ -20,6 +20,18 @@ VENDOR_TOOLS = ROOT / "vendor" / "tools"
 TOOLS = ["clang-format", "clang-tidy", "clangd"]
 
 
+def _get_github_headers():
+    headers = {"User-Agent": "mc-fetch-tools/1.0", "Accept": "application/json"}
+    token = (
+        os.environ.get("GITHUB_TOKEN")
+        or os.environ.get("GH_TOKEN")
+        or os.environ.get("MISE_GITHUB_TOKEN")
+    )
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
 def find_matching_asset(version):
     system = platform.system().lower()
     machine = platform.machine().lower()
@@ -39,7 +51,7 @@ def find_matching_asset(version):
         api_url = f"https://api.github.com/repos/llvm/llvm-project/releases/tags/{tag}"
         req = urllib.request.Request(
             api_url,
-            headers={"User-Agent": "mc-fetch-tools/1.0", "Accept": "application/json"},
+            headers=_get_github_headers(),
         )
         try:
             with urllib.request.urlopen(req) as resp:
@@ -69,15 +81,32 @@ def find_matching_asset(version):
             continue
 
     # Fallback to direct URL construction
-    arch = "aarch64" if is_arm else "x86_64"
-    os_name = "apple-darwin" if system == "darwin" else ("windows-msvc" if system == "windows" else "linux-gnu")
     tag = f"llvmorg-{version}.1.0"
     ver = f"{version}.1.0"
-    url = f"https://github.com/llvm/llvm-project/releases/download/{tag}/clang+llvm-{ver}-{arch}-{os_name}.tar.xz"
-    return tag, url, f"clang+llvm-{ver}-{arch}-{os_name}.tar.xz"
+    if system == "darwin":
+        arch_name = "ARM64" if is_arm else "X64"
+        filename = f"LLVM-{ver}-macOS-{arch_name}.tar.xz"
+    elif system == "linux":
+        arch_name = "ARM64" if is_arm else "X64"
+        filename = f"LLVM-{ver}-Linux-{arch_name}.tar.xz"
+    elif system == "windows":
+        arch_name = "aarch64" if is_arm else "x86_64"
+        filename = f"clang+llvm-{ver}-{arch_name}-pc-windows-msvc.tar.xz"
+    else:
+        arch_name = "aarch64" if is_arm else "x86_64"
+        filename = f"clang+llvm-{ver}-{arch_name}-linux-gnu.tar.xz"
+
+    url = f"https://github.com/llvm/llvm-project/releases/download/{tag}/{filename}"
+    return tag, url, filename
 
 
 def main():
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except Exception:
+            pass
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--version", type=int, default=22, help="LLVM major version (default: 22)")
     parser.add_argument("--dry-run", action="store_true", help="Resolve release URL only without downloading")
@@ -96,14 +125,14 @@ def main():
     print(f"Download URL: {url}")
 
     if args.dry_run:
-        print("Dry run — not downloading.")
+        print("Dry run -- not downloading.")
         return
 
     VENDOR_TOOLS.mkdir(parents=True, exist_ok=True)
     tar_path = VENDOR_TOOLS / filename
 
     print("Downloading archive...")
-    req = urllib.request.Request(url, headers={"User-Agent": "mc-fetch-tools/1.0"})
+    req = urllib.request.Request(url, headers=_get_github_headers())
     try:
         with urllib.request.urlopen(req) as resp, open(tar_path, "wb") as out_file:
             shutil.copyfileobj(resp, out_file)
@@ -122,7 +151,7 @@ def main():
                         target_name = f"{tool}{exe_ext}"
                         if name.endswith(f"/bin/{tool}") or name.endswith(f"/bin/{target_name}"):
                             dest = VENDOR_TOOLS / target_name
-                            print(f"  ✓ Extracting {tool} -> {dest}")
+                            print(f"  * Extracting {tool} -> {dest}")
                             f = tar.extractfile(member)
                             if f:
                                 with open(dest, "wb") as out:
