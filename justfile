@@ -33,7 +33,7 @@ hooks-install:
     lefthook install
 
 # ── Zig toolchain ─────────────────────────────────────────────────────────────
-fetch-tools version="18":
+fetch-tools version="22":
     python3 scripts/fetch_tools.py --version {{version}}
 
 check:

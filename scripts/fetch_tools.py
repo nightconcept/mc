@@ -55,15 +55,15 @@ def find_matching_asset(version):
 
                     if system == "darwin":
                         if "apple" in name or "darwin" in name or "macos" in name:
-                            if (is_arm and ("arm64" in name or "aarch64" in name)) or (is_x86 and "x86_64" in name):
+                            if (is_arm and ("arm64" in name or "aarch64" in name)) or (is_x86 and ("x86_64" in name or "x64" in name)):
                                 return tag, url, asset["name"]
                     elif system == "linux":
-                        if "linux" in name and ("ubuntu" in name or "gnu" in name):
-                            if (is_arm and ("aarch64" in name or "arm64" in name)) or (is_x86 and "x86_64" in name):
+                        if "linux" in name:
+                            if (is_arm and ("aarch64" in name or "arm64" in name)) or (is_x86 and ("x86_64" in name or "x64" in name)):
                                 return tag, url, asset["name"]
                     elif system == "windows":
                         if "win" in name or "windows" in name:
-                            if (is_arm and "arm64" in name) or (is_x86 and ("x64" in name or "x86_64" in name)):
+                            if (is_arm and ("arm64" in name or "aarch64" in name)) or (is_x86 and ("x64" in name or "x86_64" in name)):
                                 return tag, url, asset["name"]
         except Exception:
             continue
@@ -79,7 +79,7 @@ def find_matching_asset(version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", type=int, default=18, help="LLVM major version (default: 18)")
+    parser.add_argument("--version", type=int, default=22, help="LLVM major version (default: 22)")
     parser.add_argument("--dry-run", action="store_true", help="Resolve release URL only without downloading")
     parser.add_argument("tools", nargs="*", help="Tools to fetch (default: all)")
     args = parser.parse_args()

@@ -1,15 +1,15 @@
 {
   "note": "Populated by: python3 scripts/fetch_tools.py. Prefer system PATH tools.",
-  "llvm_tag": "llvmorg-18.1.8",
+  "llvm_tag": "llvmorg-22.1.8",
   "tools": {
     "clang-format": {
-      "version": "llvmorg-18.1.8"
+      "version": "llvmorg-22.1.8"
     },
     "clang-tidy": {
-      "version": "llvmorg-18.1.8"
+      "version": "llvmorg-22.1.8"
     },
     "clangd": {
-      "version": "llvmorg-18.1.8"
+      "version": "llvmorg-22.1.8"
     }
   }
 }

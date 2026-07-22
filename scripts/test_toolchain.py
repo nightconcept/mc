@@ -22,7 +22,19 @@ def zig_unit_tests():
     ])
 
 
+def ensure_tools_available():
+    if shutil.which("clang-format"):
+        return
+    vendor_tools = ROOT / "vendor" / "tools"
+    exe_ext = ".exe" if IS_WINDOWS else ""
+    if (vendor_tools / f"clang-format{exe_ext}").exists():
+        return
+    print("clang-format not found on PATH or vendor/tools/. Fetching LLVM tools...")
+    run([sys.executable, str(ROOT / "scripts" / "fetch_tools.py")])
+
+
 def smoke_test():
+    ensure_tools_available()
     mc_bin = BUILD_DIR / f"mc{EXE}"
     tmp = Path(tempfile.mkdtemp(prefix="mc-smoke-"))
     try:

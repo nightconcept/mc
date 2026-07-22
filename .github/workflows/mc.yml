@@ -23,10 +23,15 @@ jobs:
             name: macos
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendor/tools
+          key: vendor-tools-${{ matrix.name }}-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+      - run: just fetch-tools
       - run: just ci
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mc-${{ matrix.artifact }}
           path: dist/mc-${{ matrix.artifact }}
@@ -35,11 +40,17 @@ jobs:
   windows:
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: vendor/tools
+          key: vendor-tools-windows-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+      - shell: pwsh
+        run: just fetch-tools
       - shell: pwsh
         run: just ci
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mc-windows-x64
           path: dist/mc-windows-x64.exe
