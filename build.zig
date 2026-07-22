@@ -8,11 +8,18 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     // ── Package modules ──────────────────────────────────────────────────────
+    const external_toml_dep = b.dependency("toml", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const external_toml_mod = external_toml_dep.module("toml");
+
     const toml_mod = b.createModule(.{
         .root_source_file = b.path("src/toml/toml.zig"),
         .target = target,
         .optimize = optimize,
     });
+    toml_mod.addImport("toml", external_toml_mod);
 
     const fmt_mod = b.createModule(.{
         .root_source_file = b.path("src/fmt/format.zig"),

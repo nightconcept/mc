@@ -7,10 +7,11 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from _env import BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, ROOT, ZIG, run
+from _env import BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, ROOT, ZIG, package_dir, run
 
 
 def zig_unit_tests():
+    toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "test",
         "--dep", "fmt", "--dep", "lint", "--dep", "lsp",
@@ -18,7 +19,8 @@ def zig_unit_tests():
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
-        f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
+        "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
+        f"-Mtoml_ext={toml_pkg}",
         "-lc",
     ])
 

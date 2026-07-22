@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 from _env import (
-    BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, MIR_LIBS, OBJ, ROOT, ZIG, mir_dir, run,
+    BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, MIR_LIBS, OBJ, ROOT, ZIG, mir_dir, package_dir, run,
 )
 
 
@@ -68,6 +68,7 @@ def build():
     ])
 
     # Build mc frontend linking Zig packages
+    toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "build-exe", "-O", "ReleaseSafe", f"-femit-bin=build/mc{EXE}",
         "--dep", "fmt", "--dep", "lint", "--dep", "lsp",
@@ -75,7 +76,8 @@ def build():
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
-        f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
+        "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
+        f"-Mtoml_ext={toml_pkg}",
         str(driver_renamed), str(libmir), *include_flags, "-lc", *MIR_LIBS,
     ])
 

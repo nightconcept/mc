@@ -1,8 +1,7 @@
-//! Minimal TOML parser for mc.toml config files.
-//! Supports: [sections], string values, string arrays, integers, comments.
-//! Does not support: inline tables, multi-line strings, dates, floats.
+//! TOML parser for mc.toml config files powered by sam701/zig-toml.
 
 const std = @import("std");
+pub const sam701_toml = @import("toml");
 
 pub const Value = union(enum) {
     string: []const u8,
@@ -32,7 +31,6 @@ pub const Value = union(enum) {
 };
 
 pub const Table = struct {
-    /// Section name, e.g. "project", "fmt", "lint"
     section: []const u8,
     entries: std.StringHashMapUnmanaged(Value),
 
@@ -54,12 +52,14 @@ pub const Table = struct {
 pub const Document = struct {
     tables: []Table,
     allocator: std.mem.Allocator,
+    parsed: sam701_toml.Parsed(sam701_toml.Table),
 
     pub fn deinit(self: *Document) void {
         for (self.tables) |*table| {
             table.entries.deinit(self.allocator);
         }
         self.allocator.free(self.tables);
+        self.parsed.deinit();
     }
 
     /// Find a section by name. Returns null if not found.
@@ -78,111 +78,68 @@ pub const ParseError = error{
     OutOfMemory,
 };
 
-/// Parse TOML source text. Caller owns the returned Document and must call deinit().
-/// All string values are slices into the original source — do not free source before deinit.
+/// Parse TOML source text using sam701/zig-toml.
 pub fn parse(source: []const u8, allocator: std.mem.Allocator) ParseError!Document {
+    var parser = sam701_toml.Parser(sam701_toml.Table).init(allocator);
+    defer parser.deinit();
+
+    var parsed = parser.parseString(source) catch return error.InvalidSyntax;
+    errdefer parsed.deinit();
+
     var tables: std.ArrayList(Table) = .empty;
     errdefer {
         for (tables.items) |*t| t.entries.deinit(allocator);
         tables.deinit(allocator);
     }
 
-    var current_section: ?[]const u8 = null;
-    var current_entries: std.StringHashMapUnmanaged(Value) = .empty;
-    errdefer current_entries.deinit(allocator);
+    var it = parsed.value.iterator();
+    while (it.next()) |entry| {
+        const sec_name = entry.key_ptr.*;
+        switch (entry.value_ptr.*) {
+            .table => |sec_table| {
+                var entries: std.StringHashMapUnmanaged(Value) = .empty;
+                errdefer entries.deinit(allocator);
 
-    var lines = std.mem.splitScalar(u8, source, '\n');
-    while (lines.next()) |raw_line| {
-        const line = if (raw_line.len > 0 and raw_line[raw_line.len - 1] == '\r')
-            raw_line[0 .. raw_line.len - 1]
-        else
-            raw_line;
+                var sec_it = sec_table.iterator();
+                while (sec_it.next()) |kv| {
+                    const key = kv.key_ptr.*;
+                    const val = try convertValue(kv.value_ptr.*, allocator);
+                    try entries.put(allocator, key, val);
+                }
 
-        const trimmed = std.mem.trim(u8, line, " \t");
-
-        if (trimmed.len == 0 or trimmed[0] == '#') continue;
-
-        if (trimmed[0] == '[') {
-            const close = std.mem.indexOfScalar(u8, trimmed, ']') orelse
-                return error.InvalidSyntax;
-            const name = std.mem.trim(u8, trimmed[1..close], " \t");
-
-            if (current_section) |prev_name| {
-                try tables.append(allocator, .{ .section = prev_name, .entries = current_entries });
-                current_entries = .empty;
-            }
-            current_section = name;
-            continue;
+                try tables.append(allocator, .{
+                    .section = sec_name,
+                    .entries = entries,
+                });
+            },
+            else => {},
         }
-
-        const eq = std.mem.indexOfScalar(u8, trimmed, '=') orelse continue;
-        const key = std.mem.trim(u8, trimmed[0..eq], " \t");
-        const rest = std.mem.trim(u8, trimmed[eq + 1 ..], " \t");
-
-        const value_src = stripInlineComment(rest);
-
-        const value = try parseValue(value_src, allocator);
-        if (current_section == null) {
-            continue;
-        }
-        try current_entries.put(allocator, key, value);
     }
 
-    if (current_section) |name| {
-        try tables.append(allocator, .{ .section = name, .entries = current_entries });
-        current_entries = .empty;
-    }
-
-    return .{ .tables = try tables.toOwnedSlice(allocator), .allocator = allocator };
+    return .{
+        .tables = try tables.toOwnedSlice(allocator),
+        .allocator = allocator,
+        .parsed = parsed,
+    };
 }
 
-fn stripInlineComment(s: []const u8) []const u8 {
-    var in_string = false;
-    var in_array = false;
-    for (s, 0..) |c, i| {
-        if (c == '"') in_string = !in_string;
-        if (!in_string and c == '[') in_array = true;
-        if (!in_string and c == ']') in_array = false;
-        if (!in_string and !in_array and c == '#') {
-            return std.mem.trimEnd(u8, s[0..i], " \t");
-        }
-    }
-    return s;
-}
-
-fn parseValue(s: []const u8, allocator: std.mem.Allocator) ParseError!Value {
-    if (s.len == 0) return .{ .string = "" };
-
-    if (s[0] == '"') {
-        if (s.len < 2 or s[s.len - 1] != '"') return error.UnterminatedString;
-        return .{ .string = s[1 .. s.len - 1] };
-    }
-
-    if (s[0] == '[') {
-        if (s[s.len - 1] != ']') return error.UnterminatedArray;
-        const inner = std.mem.trim(u8, s[1 .. s.len - 1], " \t");
-        if (inner.len == 0) return .{ .array = &.{} };
-
-        var items: std.ArrayList([]const u8) = .empty;
-        errdefer items.deinit(allocator);
-
-        var it = std.mem.splitScalar(u8, inner, ',');
-        while (it.next()) |elem| {
-            const e = std.mem.trim(u8, elem, " \t");
-            if (e.len >= 2 and e[0] == '"' and e[e.len - 1] == '"') {
-                try items.append(allocator, e[1 .. e.len - 1]);
-            } else if (e.len > 0) {
-                try items.append(allocator, e);
+fn convertValue(val: sam701_toml.Value, allocator: std.mem.Allocator) error{OutOfMemory}!Value {
+    switch (val) {
+        .string => |s| return .{ .string = s },
+        .integer => |i| return .{ .integer = i },
+        .array => |ar| {
+            var items: std.ArrayList([]const u8) = .empty;
+            errdefer items.deinit(allocator);
+            for (ar.items) |elem| {
+                switch (elem) {
+                    .string => |s| try items.append(allocator, s),
+                    else => {},
+                }
             }
-        }
-        return .{ .array = try items.toOwnedSlice(allocator) };
+            return .{ .array = try items.toOwnedSlice(allocator) };
+        },
+        else => return .{ .string = "" },
     }
-
-    if (std.fmt.parseInt(i64, s, 10)) |i| {
-        return .{ .integer = i };
-    } else |_| {}
-
-    return .{ .string = s };
 }
 
 test "parse basic mc.toml" {

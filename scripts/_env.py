@@ -28,24 +28,26 @@ def _zig_global_cache() -> Path:
     sys.exit("could not determine zig global cache dir")
 
 
-def mir_dir() -> Path:
-    """Resolve the MIR source directory from the local zig-pkg/ extraction."""
+def package_dir(dep_name: str) -> Path:
+    """Resolve a package directory from build.zig.zon hash in zig-pkg/."""
     zon = ROOT / "build.zig.zon"
     text = zon.read_text()
-    # Extract the hash value from the .zon file
-    for line in text.splitlines():
-        if ".hash" in line:
-            hash_val = line.split('"')[1]
-            break
-    else:
-        sys.exit("could not find mir hash in build.zig.zon")
-    pkg = ROOT / "zig-pkg" / hash_val
-    if not pkg.exists():
-        sys.exit(
-            f"MIR package not found at: {pkg}\n"
-            "Run: mise exec -- zig fetch --save=mir <url>  or  just update-mir <sha>"
-        )
-    return pkg
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
+        if f".{dep_name}" in line:
+            for j in range(i, len(lines)):
+                if ".hash" in lines[j]:
+                    hash_val = lines[j].split('"')[1]
+                    pkg = ROOT / "zig-pkg" / hash_val
+                    if pkg.exists():
+                        return pkg
+                    sys.exit(f"Package '{dep_name}' not found at: {pkg}")
+    sys.exit(f"could not find hash for '{dep_name}' in build.zig.zon")
+
+
+def mir_dir() -> Path:
+    """Resolve the MIR source directory from the local zig-pkg/ extraction."""
+    return package_dir("mir")
 
 
 # Resolved lazily — call mir_dir() in scripts that need C sources.

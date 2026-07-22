@@ -6,6 +6,10 @@
             .url = "https://github.com/nightconcept/mir/archive/56081b99d47e027afe444615e25605f3650916d7.tar.gz",
             .hash = "N-V-__8AAFFbBwPgb5NMVIL0MOFzTX7wTXNu3BXmcGF1Qb3l",
         },
+        .toml = .{
+            .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.16#8685923e32e8b8a795eb2715684236975a70faed",
+            .hash = "toml-0.3.0-bV14BRmKAQAWR0FT0KUKFwVJTImaFhWjSe6HfSMtNZOH",
+        },
     },
     .paths = .{""},
     .fingerprint = 0x453137f75ebae6f1,
