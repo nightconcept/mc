@@ -3,7 +3,13 @@ name: mc build and test
 on:
   push:
     branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -30,10 +36,22 @@ jobs:
         with:
           submodules: true
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache vendor tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vendor/tools
           key: vendor-tools-${{ matrix.name }}-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+          restore-keys: |
+            vendor-tools-${{ matrix.name }}-
+      - name: Cache Zig compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cache/zig
+            ~/.local/share/zig
+          key: zig-cache-${{ runner.os }}-${{ hashFiles('packages/cli/mc.zig', 'packages/compiler/**') }}
+          restore-keys: |
+            zig-cache-${{ runner.os }}-
       - run: just fetch-tools
       - run: just ci
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -41,6 +59,7 @@ jobs:
           name: mc-${{ matrix.artifact }}
           path: dist/mc-${{ matrix.artifact }}
           if-no-files-found: error
+          retention-days: 7
 
   windows:
     runs-on: windows-2025
@@ -49,10 +68,21 @@ jobs:
         with:
           submodules: true
       - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache vendor tools
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: vendor/tools
           key: vendor-tools-windows-${{ hashFiles('vendor/tools/manifest.json', 'scripts/fetch_tools.py') }}
+          restore-keys: |
+            vendor-tools-windows-
+      - name: Cache Zig compiler cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/AppData/Local/zig
+          key: zig-cache-windows-${{ hashFiles('packages/cli/mc.zig', 'packages/compiler/**') }}
+          restore-keys: |
+            zig-cache-windows-
       - shell: pwsh
         run: just fetch-tools
       - shell: pwsh
@@ -62,3 +92,4 @@ jobs:
           name: mc-windows-x64
           path: dist/mc-windows-x64.exe
           if-no-files-found: error
+          retention-days: 7
