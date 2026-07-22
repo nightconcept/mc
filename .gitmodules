@@ -1,4 +1,5 @@
 [submodule "packages/compiler"]
 	path = packages/compiler
-	url = https://github.com/vnmakarov/mir
-	branch = master
+	url = https://github.com/nightconcept/mir.git
+	branch = mc
+
