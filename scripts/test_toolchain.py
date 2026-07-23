@@ -14,13 +14,14 @@ def zig_unit_tests():
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "test",
-        "--dep", "fmt", "--dep", "lint", "--dep", "lsp",
+        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
         "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
         f"-Mtoml_ext={toml_pkg}",
+        f"-Mruntime={BUILD_DIR / 'runtime_embed.zig'}",
         "-lc",
     ])
 
@@ -77,8 +78,8 @@ def smoke_test():
         rc = mc(str(real_header_c), capture_output=True, text=True).returncode
         assert rc == 4, f"real system-header compile/run failed: rc={rc}"
 
-        hello_bin = tmp / f"hello{EXE}"
-        mc("build", str(hello_c), "-c", "-o", str(hello_bin.with_suffix(".bmir")), check=True)
+        hello_obj = tmp / ("hello.obj" if IS_WINDOWS else "hello.o")
+        mc("build", str(hello_c), "-c", "-o", str(hello_obj), check=True)
 
         # Test mc fmt and mc fmt --check
         mc("fmt", str(hello_c), check=True)
@@ -92,7 +93,7 @@ def smoke_test():
         if result.returncode == 0:
             sys.exit("mc lint accepted invalid C")
 
-        mc("c2m", "-h", capture_output=True, check=True)
+        mc("tcc", "-h", capture_output=True, check=True)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 

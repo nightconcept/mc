@@ -10,6 +10,10 @@
             .url = "git+https://github.com/sam701/zig-toml?ref=zig-0.16#8685923e32e8b8a795eb2715684236975a70faed",
             .hash = "toml-0.3.0-bV14BRmKAQAWR0FT0KUKFwVJTImaFhWjSe6HfSMtNZOH",
         },
+        .tinycc = .{
+            .url = "https://github.com/nightconcept/tinycc/archive/refs/heads/mtc.tar.gz",
+            .hash = "N-V-__8AAKIDRgD5ta9q5_0KPrA5RvX2eXSACHETzrCrPfGH",
+        },
     },
     .paths = .{""},
     .fingerprint = 0x453137f75ebae6f1,

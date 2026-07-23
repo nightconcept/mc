@@ -1,23 +1,28 @@
 const std = @import("std");
+const builtin = @import("builtin");
 const Io = std.Io;
 
 const fmt_pkg = @import("fmt");
 const lint_pkg = @import("lint");
 const lsp_pkg = @import("lsp");
+const runtime_pkg = @import("runtime");
 
-extern fn c2m_main(argc: c_int, argv: [*c][*c]u8, envp: [*c][*c]u8) c_int;
+extern fn tcc_main(argc: c_int, argv: [*c][*c]u8) c_int;
+
+const runtime_archive = runtime_pkg.archive;
+const tcc_version = std.mem.trim(u8, runtime_pkg.version, " \r\n");
 
 const usage =
-    \\mc (ModC) -- MIR/c2mir-backed C compiler and toolchain
+    \\mc (ModC) -- TinyCC-backed C compiler and toolchain
     \\Usage:
-    \\  mc file.c [args]              Compile and run (JIT via c2mir)
+    \\  mc file.c [args]              Compile and run (JIT via tcc)
     \\  mc run file.c -- [args]       Compile and run
     \\  mc build [args]               Build artifact (-c/-S/-o, ...)
     \\  mc lint [--syntax-only] file  Lint (syntax gate + clang-tidy)
     \\  mc fmt [--check] [files|.]    Format with clang-format
     \\  mc lsp                        Start LSP server (clangd bridge)
     \\  mc init                       Scaffold mc.toml in current directory
-    \\  mc c2m [args]                 Raw c2mir interface
+    \\  mc tcc [args]                 Raw tcc interface
     \\
 ;
 
@@ -71,14 +76,22 @@ fn run(init: std.process.Init) !u8 {
             }
         }
 
-        var c2m_argv: std.ArrayList([:0]const u8) = .empty;
-        try c2m_argv.append(arena, "-fsyntax-only");
-        try c2m_argv.appendSlice(arena, files.items);
+        // tcc has no -fsyntax-only; -c -o <discard> parses and generates
+        // code without linking, which is the same gate intent.
+        const discard_obj = if (builtin.os.tag == .windows) "NUL" else "/dev/null";
+        const cache = try prepareRuntime(arena, init.io, init.environ_map);
 
-        var argv_buf = try arena.alloc([*c]u8, c2m_argv.items.len + 1);
+        var tcc_argv: std.ArrayList([:0]const u8) = .empty;
+        try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-B{s}", .{cache}, 0));
+        try tcc_argv.append(arena, "-c");
+        try tcc_argv.append(arena, "-o");
+        try tcc_argv.append(arena, discard_obj);
+        try tcc_argv.appendSlice(arena, files.items);
+
+        var argv_buf = try arena.alloc([*c]u8, tcc_argv.items.len + 1);
         argv_buf[0] = @constCast(args[0].ptr);
-        for (c2m_argv.items, 1..) |arg, i| argv_buf[i] = @constCast(arg.ptr);
-        const syntax_rc = c2m_main(@intCast(argv_buf.len), argv_buf.ptr, null);
+        for (tcc_argv.items, 1..) |arg, i| argv_buf[i] = @constCast(arg.ptr);
+        const syntax_rc = tcc_main(@intCast(argv_buf.len), argv_buf.ptr);
         if (syntax_rc != 0) return @intCast(syntax_rc);
         if (syntax_only) return 0;
 
@@ -93,24 +106,26 @@ fn run(init: std.process.Init) !u8 {
         });
     }
 
-    const routed = try route(arena, args[1..]);
+    const cache = try prepareRuntime(arena, init.io, init.environ_map);
+    const routed = try route(arena, cache, args[1..]);
     var argv = try arena.alloc([*c]u8, routed.len + 1);
     argv[0] = @constCast(args[0].ptr);
     for (routed, 1..) |arg, i| argv[i] = @constCast(arg.ptr);
-    return @intCast(c2m_main(@intCast(argv.len), argv.ptr, null));
+    return @intCast(tcc_main(@intCast(argv.len), argv.ptr));
 }
 
-fn route(arena: std.mem.Allocator, args: []const [:0]const u8) ![]const [:0]const u8 {
+fn route(arena: std.mem.Allocator, cache: []const u8, args: []const [:0]const u8) ![]const [:0]const u8 {
     var out: std.ArrayList([:0]const u8) = .empty;
+    try out.append(arena, try std.fmt.allocPrintSentinel(arena, "-B{s}", .{cache}, 0));
 
-    if (eql(args[0], "c2m") or eql(args[0], "build")) {
+    if (eql(args[0], "tcc") or eql(args[0], "build")) {
         try out.appendSlice(arena, args[1..]);
     } else {
         const start: usize = if (eql(args[0], "run")) 1 else 0;
         var delimiter = true;
         if (args[start..].len == 0) return error.MissingSourceFile;
+        try out.append(arena, "-run");
         try out.append(arena, args[start]);
-        try out.append(arena, "-eg");
         for (args[start + 1 ..]) |arg| {
             if (delimiter and eql(arg, "--")) {
                 delimiter = false;
@@ -120,6 +135,35 @@ fn route(arena: std.mem.Allocator, args: []const [:0]const u8) ![]const [:0]cons
         }
     }
     return out.toOwnedSlice(arena);
+}
+
+fn prepareRuntime(arena: std.mem.Allocator, io: Io, env: *const std.process.Environ.Map) ![]const u8 {
+    const cache = if (env.get("MC_RUNTIME_CACHE_DIR")) |path|
+        path
+    else blk: {
+        const base = switch (builtin.os.tag) {
+            .windows => env.get("LOCALAPPDATA") orelse return error.MissingCacheDirectory,
+            .macos => try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, "Library", "Caches" }),
+            else => env.get("XDG_CACHE_HOME") orelse try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, ".cache" }),
+        };
+        const target = try std.fmt.allocPrint(arena, "{s}-{s}-{s}", .{ tcc_version, @tagName(builtin.cpu.arch), @tagName(builtin.os.tag) });
+        break :blk try std.fs.path.join(arena, &.{ base, "mc", target });
+    };
+
+    const marker = try std.fs.path.join(arena, &.{ cache, ".complete" });
+    Io.Dir.access(.cwd(), io, marker, .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            try Io.Dir.createDirPath(.cwd(), io, cache);
+            var dir = try Io.Dir.openDir(.cwd(), io, cache, .{});
+            defer dir.close(io);
+            var reader: Io.Reader = .fixed(runtime_archive);
+            // ponytail: concurrent first runs may race; add a cache lock if this is observed in practice.
+            try std.tar.extract(io, dir, &reader, .{});
+            try dir.writeFile(io, .{ .sub_path = ".complete", .data = tcc_version });
+        },
+        else => return err,
+    };
+    return cache;
 }
 
 fn findProjectRoot(io: std.Io, allocator: std.mem.Allocator) ![]const u8 {
@@ -230,16 +274,19 @@ test "routes commands" {
     defer arena_state.deinit();
     const arena = arena_state.allocator();
 
-    const shorthand = try route(arena, &.{"hello.c"});
-    try std.testing.expectEqualStrings("hello.c", shorthand[0]);
-    try std.testing.expectEqualStrings("-eg", shorthand[1]);
+    const shorthand = try route(arena, "/cache", &.{"hello.c"});
+    try std.testing.expectEqualStrings("-B/cache", shorthand[0]);
+    try std.testing.expectEqualStrings("-run", shorthand[1]);
+    try std.testing.expectEqualStrings("hello.c", shorthand[2]);
 
-    const build = try route(arena, &.{ "build", "hello.c", "-o", "hello" });
-    try std.testing.expectEqualStrings("hello.c", build[0]);
-    try std.testing.expectEqualStrings("-o", build[1]);
+    const build = try route(arena, "/cache", &.{ "build", "hello.c", "-o", "hello" });
+    try std.testing.expectEqualStrings("-B/cache", build[0]);
+    try std.testing.expectEqualStrings("hello.c", build[1]);
+    try std.testing.expectEqualStrings("-o", build[2]);
 
-    const run_args = try route(arena, &.{ "run", "hello.c", "--", "one" });
-    try std.testing.expectEqualStrings("hello.c", run_args[0]);
-    try std.testing.expectEqualStrings("-eg", run_args[1]);
-    try std.testing.expectEqualStrings("one", run_args[2]);
+    const run_args = try route(arena, "/cache", &.{ "run", "hello.c", "--", "one" });
+    try std.testing.expectEqualStrings("-B/cache", run_args[0]);
+    try std.testing.expectEqualStrings("-run", run_args[1]);
+    try std.testing.expectEqualStrings("hello.c", run_args[2]);
+    try std.testing.expectEqualStrings("one", run_args[3]);
 }

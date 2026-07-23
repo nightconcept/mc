@@ -39,6 +39,11 @@ def main():
     existing = [s for s in ZIG_SOURCES if (REPO_ROOT / s).exists()]
     _run(["zig", "fmt", "--check", *existing])
     _run(["zig", "build", "check"])
+
+    # mc.zig embeds the compiled tcc runtime archive (build/mc-runtime.tar),
+    # so even the fast unit-test path needs one prior build to exist.
+    if not (REPO_ROOT / "build" / "mc-runtime.tar").exists():
+        _py("build.py")
     _py("test_toolchain.py", "--unit-only")
 
     if args.fast:

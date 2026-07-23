@@ -49,10 +49,10 @@ lint file:
     ./build/mc lint {{file}}
 
 # ── meta ──────────────────────────────────────────────────────────────────────
-# Update MIR: push changes to nightconcept/mir mc branch, get the new SHA,
-# then run: just update-mir <new-sha>
-update-mir sha:
-    mise exec -- zig fetch --save=mir https://github.com/nightconcept/mir/archive/{{sha}}.tar.gz
+# Update TinyCC: push changes to nightconcept/tinycc mtc branch, then run:
+# just update-tinycc
+update-tinycc:
+    mise exec -- zig fetch --save=tinycc https://github.com/nightconcept/tinycc/archive/refs/heads/mtc.tar.gz
 
 ci:
     just build

@@ -12,9 +12,10 @@ BUILD_DIR = ROOT / "build"
 DIST_DIR = ROOT / "dist"
 ZIG = os.environ.get("ZIG", "zig")
 IS_WINDOWS = sys.platform == "win32"
+IS_LINUX = sys.platform.startswith("linux")
 EXE = ".exe" if IS_WINDOWS else ""
 OBJ = ".obj" if IS_WINDOWS else ".o"
-MIR_LIBS = [] if IS_WINDOWS else ["-lpthread"]
+TCC_LIBS = [] if IS_WINDOWS else ["-lpthread"] + (["-ldl"] if IS_LINUX else [])
 
 
 def _zig_global_cache() -> Path:
@@ -45,14 +46,9 @@ def package_dir(dep_name: str) -> Path:
     sys.exit(f"could not find hash for '{dep_name}' in build.zig.zon")
 
 
-def mir_dir() -> Path:
-    """Resolve the MIR source directory from the local zig-pkg/ extraction."""
-    return package_dir("mir")
-
-
-# Resolved lazily — call mir_dir() in scripts that need C sources.
-# Kept as a module-level alias so existing callers work unchanged.
-COMPILER_DIR = None  # use mir_dir() instead
+def tinycc_dir() -> Path:
+    """Resolve the TinyCC source directory from the local zig-pkg/ extraction."""
+    return package_dir("tinycc") / "src"
 
 
 def run(cmd, **kw):
