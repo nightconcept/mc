@@ -4,6 +4,7 @@ import os
 import platform
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -30,20 +31,51 @@ def _zig_global_cache() -> Path:
 
 
 def package_dir(dep_name: str) -> Path:
-    """Resolve a package directory from build.zig.zon hash in zig-pkg/."""
+    """Resolve a package directory from build.zig.zon hash in zig-pkg/, fetching and
+    extracting it on demand if it isn't there yet (e.g. on a fresh checkout or CI
+    cache miss)."""
     zon = ROOT / "build.zig.zon"
     text = zon.read_text()
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if f".{dep_name}" in line:
+            url = None
+            hash_val = None
             for j in range(i, len(lines)):
+                if ".url" in lines[j] and url is None:
+                    url = lines[j].split('"')[1]
                 if ".hash" in lines[j]:
                     hash_val = lines[j].split('"')[1]
-                    pkg = ROOT / "zig-pkg" / hash_val
-                    if pkg.exists():
-                        return pkg
-                    sys.exit(f"Package '{dep_name}' not found at: {pkg}")
+                    break
+            if hash_val is None:
+                sys.exit(f"could not find hash for '{dep_name}' in build.zig.zon")
+            pkg = ROOT / "zig-pkg" / hash_val
+            if pkg.exists():
+                return pkg
+            if url is None:
+                sys.exit(f"could not find url for '{dep_name}' in build.zig.zon")
+            return _fetch_package(dep_name, url, hash_val)
     sys.exit(f"could not find hash for '{dep_name}' in build.zig.zon")
+
+
+def _fetch_package(dep_name: str, url: str, hash_val: str) -> Path:
+    """Fetch a build.zig.zon dependency into the Zig global cache, then extract the
+    cached tarball into zig-pkg/<hash>/ so scripts can read its sources directly."""
+    pkg = ROOT / "zig-pkg" / hash_val
+    print(f"+ fetching {dep_name} ({url})", flush=True)
+    run([ZIG, "fetch", url])
+    tarball = _zig_global_cache() / "p" / f"{hash_val}.tar.gz"
+    if not tarball.exists():
+        sys.exit(
+            f"'zig fetch' did not produce the expected tarball for '{dep_name}': {tarball}\n"
+            f"(build.zig.zon hash may be stale for {url})"
+        )
+    pkg.parent.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(tarball, "r:gz") as tar:
+        tar.extractall(pkg.parent)
+    if not pkg.exists():
+        sys.exit(f"extraction of '{dep_name}' did not produce expected dir: {pkg}")
+    return pkg
 
 
 def tinycc_dir() -> Path:
