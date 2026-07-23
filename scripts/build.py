@@ -59,10 +59,12 @@ def find_source(compiler_dir, name):
 
 
 def windows_system_include_dir():
-    # TinyCC's own win32/include headers are self-contained (no MinGW/system
-    # headers needed), but zig cc still needs its bundled mm_malloc.h shim
-    # the same way c2mir's Windows build did — see git history for the MIR
-    # equivalent of this helper.
+    # zig cc compiles tcc.c against its bundled mingw-w64 headers
+    # (any-windows-any). That tree is missing mm_malloc.h, so drop zig's shim
+    # copy into it. The resolved dir is also baked into tcc via
+    # ADDITIONAL_INCLUDE_PATH so the tcc binary can find system headers when it
+    # compiles user C at runtime — the same way c2mir's Windows build did (see
+    # git history for the MIR equivalent of this helper).
     out = subprocess.run([ZIG, "env"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     lib_dir = Path(re.search(r'\.lib_dir = "([^"]+)"', out).group(1))
     mingw_dir = lib_dir / "libc" / "include" / "any-windows-any"
@@ -100,9 +102,13 @@ def build():
         'pub const version = @embedFile("tcc-version.txt");\n'
     )
 
+    # tcc.c is compiled with zig cc (clang), so it must see a complete,
+    # clang-compilable system header set. On Windows that means zig's bundled
+    # mingw-w64 headers (any-windows-any) — NOT TinyCC's win32/include, which is
+    # a stripped set that relies on tcc's own built-in type predefinitions
+    # (intptr_t/uintptr_t) and fails to compile under clang. win32/include is
+    # still shipped in mc-runtime for tcc's own use at runtime (see below).
     include_flags = ["-I", str(config_dir), "-I", str(compiler_dir)]
-    if IS_WINDOWS:
-        include_flags += ["-I", str(compiler_dir / "win32" / "include")]
 
     def compile_obj(src, obj, extra_flags=()):
         run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2", *extra_flags])
