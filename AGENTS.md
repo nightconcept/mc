@@ -62,6 +62,7 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Pushed `mc-mods` (sqlite-3.53.3, lua-5.4.8) to `nightconcept/mc-mods`.
 - Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
   projects; verified `mc build` + a `luac`/`lua` round-trip.
 - Vendored sqlite-3.53.3 in `mc-mods` with a tcc-compat `shell.c` patch;

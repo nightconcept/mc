@@ -42,12 +42,11 @@ Scope note: doomgeneric is out of scope for now (deferred, not planned).
       computed-goto extension lvm.c's default dispatch wants. Verified
       `mc build` for both and a `lua`/`luac` round-trip (`luac -o` then
       `lua` running the compiled chunk). See `mc-mods/lua-5.4.8/PATCHES.md`.
+- [x] Pushed the `mc-mods` commits (sqlite-3.53.3, lua-5.4.8) to
+      `nightconcept/mc-mods` `main`, with the user's explicit go-ahead.
 
 ## Next up
 
-- [ ] Push the `mc-mods` commits (sqlite-3.53.3, lua-5.4.8) to the
-      `nightconcept/mc-mods` remote — needs explicit go-ahead, pushing to
-      a shared/external repo.
 - [ ] `tests/stress/` Python harness: per-project fetch (pinned ref from
       `mc-mods`) into a gitignored cache dir, `mc build`, smoke-run,
       pass/fail report — wired as `just test-stress`.
