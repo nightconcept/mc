@@ -58,20 +58,17 @@ def find_source(compiler_dir, name):
     sys.exit(f"tinycc runtime source not found: {name}")
 
 
-def windows_system_include_dir():
+def ensure_zig_mingw_mm_malloc():
     # zig cc compiles tcc.c against its bundled mingw-w64 headers
-    # (any-windows-any). That tree is missing mm_malloc.h, so drop zig's shim
-    # copy into it. The resolved dir is also baked into tcc via
-    # ADDITIONAL_INCLUDE_PATH so the tcc binary can find system headers when it
-    # compiles user C at runtime — the same way c2mir's Windows build did (see
-    # git history for the MIR equivalent of this helper).
+    # (any-windows-any). malloc.h in that tree #includes <mm_malloc.h>, which the
+    # any-windows-any set is missing, so drop zig's own shim copy into it (from
+    # zig's generic include/ dir) before the driver compile below.
     out = subprocess.run([ZIG, "env"], cwd=ROOT, capture_output=True, text=True, check=True).stdout
     lib_dir = Path(re.search(r'\.lib_dir = "([^"]+)"', out).group(1))
     mingw_dir = lib_dir / "libc" / "include" / "any-windows-any"
     mm_malloc = mingw_dir / "mm_malloc.h"
     if not mm_malloc.exists():
         shutil.copy(lib_dir / "include" / "mm_malloc.h", mm_malloc)
-    return mingw_dir
 
 
 def build():
@@ -127,11 +124,20 @@ def build():
         driver_defines = [f'-DCONFIG_TRIPLET="{triplet}"']
 
     # On Windows the runtime lib is self-compiled below by tcc, which (PE target)
-    # only searches {B}/include for system headers and so can't find the CRT
-    # headers (stdio.h etc). Feed it zig's bundled mingw-w64 headers explicitly.
+    # only searches {B}/include (= compiler_dir/include, tcc's arch headers:
+    # stdarg.h/stddef.h/...) for system headers and so can't find the CRT headers
+    # (stdio.h etc). Feed it TinyCC's own win32/include set — NOT zig's mingw-w64
+    # headers, whose vadefs.h #errors unless __GNUC__/_MSC_VER is defined (tcc
+    # defines neither on _WIN32; see tccdefs.h). win32/include ships a
+    # tcc-compatible vadefs.h and is the same header set shipped in mc-runtime
+    # for tcc's own use at runtime (see header_dir below), so the runtime lib is
+    # built against exactly the headers it will later be linked against.
+    # <windows.h> lives in the winapi/ subdir, so both dirs are needed.
     runtime_sysinclude = []
     if IS_WINDOWS:
-        runtime_sysinclude = [windows_system_include_dir().as_posix()]
+        ensure_zig_mingw_mm_malloc()
+        win32_include = compiler_dir / "win32" / "include"
+        runtime_sysinclude = [win32_include.as_posix(), (win32_include / "winapi").as_posix()]
 
     # Plain tcc driver. tcc.c is itself a unity ("ONE_SOURCE") build that
     # #includes libtcc.c (which in turn pulls in tccpp.c/tccgen.c/tccdbg.c/
@@ -172,15 +178,43 @@ def build():
 
     # Stage the embedded runtime archive: headers + libtcc1.a + loose
     # objects, extracted by mc.zig at first run via `-B<cache>`.
+    #
+    # On non-Windows the shipped headers are just tcc's own arch/predef set
+    # (include/*.h: tccdefs.h, stdarg.h, stddef.h, ...); system CRT headers come
+    # from the host (/usr/include, macOS SDK). On Windows there is no host libc
+    # to lean on, so tcc ships the whole CRT header set (win32/include, including
+    # its winapi/, sys/, sec_api/ subdirs) AND the arch/predef headers merged in
+    # on top — matching upstream's Windows install (Makefile install-win / win32
+    # build-tcc.bat). tccdefs.h in particular must be present: our minimal
+    # config.h doesn't compile the predefs in, so tcc reads {B}/include/tccdefs.h
+    # at runtime.
     runtime_root = BUILD_DIR / "mc-runtime"
-    (runtime_root / "include").mkdir(parents=True)
-    header_dir = compiler_dir / "win32" / "include" if IS_WINDOWS else compiler_dir / "include"
-    for header in header_dir.glob("*.h"):
-        shutil.copy(header, runtime_root / "include" / header.name)
-    shutil.copy(compiler_dir / "tcclib.h", runtime_root / "include" / "tcclib.h")
-    shutil.copy(libtcc1, runtime_root / "libtcc1.a")
+    include_dst = runtime_root / "include"
+    include_dst.mkdir(parents=True)
+    if IS_WINDOWS:
+        shutil.copytree(compiler_dir / "win32" / "include", include_dst, dirs_exist_ok=True)
+    for header in (compiler_dir / "include").glob("*.h"):
+        shutil.copy(header, include_dst / header.name)
+    shutil.copy(compiler_dir / "tcclib.h", include_dst / "tcclib.h")
+    # libtcc1.a and the loose support objects (runmain/bt-*/bcheck) are found
+    # via tcc's library search path at runtime. On ELF/Mach-O targets that path
+    # is {B} itself, but on PE it is {B}/lib (CONFIG_TCC_LIBPATHS in tcc.h), so
+    # nest them under lib/ on Windows. tcc also requests the support objects by
+    # their .o name (tcc_add_support "runmain.o", "bt-exe.o", ...), so rename the
+    # Windows .obj outputs to .o.
+    lib_dst = runtime_root / "lib" if IS_WINDOWS else runtime_root
+    lib_dst.mkdir(exist_ok=True)
+    shutil.copy(libtcc1, lib_dst / "libtcc1.a")
     for obj in loose_objs:
-        shutil.copy(obj, runtime_root / obj.name)
+        shutil.copy(obj, lib_dst / (obj.stem + ".o" if IS_WINDOWS else obj.name))
+
+    # On Windows the C math functions live in msvcrt (auto-linked by tcc's PE
+    # backend), so there is no separate libm — but portable code still links
+    # -lm. Ship an empty libm.a stub so -lm resolves, exactly as mingw-w64 does;
+    # the math symbols themselves come from msvcrt. (On ELF/Mach-O the host libc
+    # provides a real libm, so this is Windows-only.)
+    if IS_WINDOWS:
+        run([str(tcc_exe), "-ar", "rcs", str(lib_dst / "libm.a")])
 
     runtime_tar = BUILD_DIR / "mc-runtime.tar"
     with tarfile.open(runtime_tar, "w") as tar:
