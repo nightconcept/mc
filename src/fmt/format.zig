@@ -3,6 +3,7 @@
 //! Falls back to .clang-format file, then built-in defaults.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const toml = @import("toml");
 
 /// Default clang-format style used when no .clang-format or [fmt] config exists.
@@ -177,11 +178,19 @@ fn runClangFormat(
 }
 
 pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator) ![]const u8 {
+    // Executables carry a .exe suffix on Windows; the fetched tools in .tools/
+    // (and anything on PATH) are e.g. clang-format.exe, so look for that name.
+    const exe_name = if (builtin.os.tag == .windows)
+        try std.fmt.allocPrint(alloc, "{s}.exe", .{name})
+    else
+        name;
+    defer if (builtin.os.tag == .windows) alloc.free(exe_name);
+
     if (std.process.Environ.empty.getAlloc(alloc, "PATH")) |path_env| {
         defer alloc.free(path_env);
         var it = std.mem.splitScalar(u8, path_env, if (std.fs.path.sep == '\\') ';' else ':');
         while (it.next()) |dir| {
-            const candidate = try std.fs.path.join(alloc, &.{ dir, name });
+            const candidate = try std.fs.path.join(alloc, &.{ dir, exe_name });
             defer alloc.free(candidate);
             if (fileExists(io, candidate)) return alloc.dupe(u8, candidate);
         }
@@ -194,11 +203,11 @@ pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator) ![]const
     var dir = exe_dir;
     var attempts: u8 = 0;
     while (attempts < 5) : (attempts += 1) {
-        const tools_path = try std.fs.path.join(alloc, &.{ dir, ".tools", name });
+        const tools_path = try std.fs.path.join(alloc, &.{ dir, ".tools", exe_name });
         defer alloc.free(tools_path);
         if (fileExists(io, tools_path)) return alloc.dupe(u8, tools_path);
 
-        const vendor_path = try std.fs.path.join(alloc, &.{ dir, "vendor", "tools", name });
+        const vendor_path = try std.fs.path.join(alloc, &.{ dir, "vendor", "tools", exe_name });
         defer alloc.free(vendor_path);
         if (fileExists(io, vendor_path)) return alloc.dupe(u8, vendor_path);
 
