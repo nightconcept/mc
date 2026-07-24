@@ -20,14 +20,31 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
   embedded into `mc` — see `scripts/build.py`
 - `scripts/` — build/test/package CLI, driven via `just` (tools pinned in `mise.toml`)
 
+## Documentation Hub (Spokes)
+
+- [Architecture](docs/architecture.md) — layout, TinyCC dependency, runtime
+  embedding, package boundaries
+- [Development Build](docs/development.md) — `just build`/`clean`/`package`/
+  `ci`, building the `mc` tool itself
+- [Build command](docs/build.md) — the `mc build` CLI subcommand (compile a
+  user's C file to an artifact)
+- [Run command](docs/run.md) — the `mc run` CLI subcommand and bare
+  `mc file.c` shorthand (JIT compile + execute)
+- [Format](docs/fmt.md) — `mc fmt` style resolution and `just fmt` (Zig
+  sources)
+- [Lint](docs/lint.md) — `mc lint` checks and usage
+- [Testing](docs/testing.md) — legacy/toolchain suites, quality gates
+- [Conventions](docs/conventions.md) — commit style, code style, tool pins
+
 ## Essential Commands
 
 - **Tools**: `mise install` (zig, python, just, lefthook), then `just hooks-install`
 - **Gate**: `just gate-fast` (fmt + zig unit tests, runs pre-commit — needs one
   prior `just build` since `mc.zig` embeds the compiled tcc runtime archive)
   or `just gate` (adds build + legacy + toolchain tests, runs pre-push)
-- **Build**: `just build` — out-of-tree build into `build/` (objects, libs,
-  `tcc`, `mc`); repo root and `src/` stay clean
+- **Build the tool**: `just build` — out-of-tree build into `build/`
+  (objects, libs, `tcc`, `mc`); repo root and `src/` stay clean. Not to be
+  confused with the `mc build` CLI subcommand (see `docs/build.md`).
 - **Test legacy (vendored upstream TinyCC tests2 suite)**: `just test-legacy`
 - **Test toolchain (mc CLI, not compilation)**: `just test-toolchain`
 - **Test both, legacy first**: `just test`
@@ -47,7 +64,4 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
   compiler changes and `just test-toolchain` for `mc` CLI changes. Legacy
   tests always gate before toolchain tests — `just test` enforces that order.
 
-## Spoke Index
-
-- [README](README.md) — project overview, installation, and usage
-- [TinyCC docs](https://github.com/nightconcept/tinycc/blob/mtc/tcc-doc.texi) — upstream TinyCC reference
+See `docs/conventions.md` and `docs/testing.md` for detail.
