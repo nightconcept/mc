@@ -113,9 +113,25 @@ def build():
     def compile_obj(src, obj, extra_flags=()):
         run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2", *extra_flags])
 
-    tcc_flags = []
+    # On multiarch Linux (Debian/Ubuntu) libc's headers and shared objects live
+    # in per-triplet subdirs (/usr/include/<triplet>, /usr/lib/<triplet>) rather
+    # than directly under /usr/include and /usr/lib. tcc only searches those
+    # subdirs when CONFIG_TRIPLET is defined (see ALSO_TRIPLET in tcc.h); our
+    # minimal config.h doesn't define it. Bake it in so both the standalone tcc
+    # that self-compiles the runtime lib below AND the tcc linked into mc can
+    # find <bits/libc-header-start.h> at compile time and libc at link time.
+    # Not applicable to Windows (PE) or macOS (SDK-path based).
+    driver_defines = []
+    if os_name == "linux":
+        triplet = {"x86_64": "x86_64-linux-gnu", "arm64": "aarch64-linux-gnu"}[arch]
+        driver_defines = [f'-DCONFIG_TRIPLET="{triplet}"']
+
+    # On Windows the runtime lib is self-compiled below by tcc, which (PE target)
+    # only searches {B}/include for system headers and so can't find the CRT
+    # headers (stdio.h etc). Feed it zig's bundled mingw-w64 headers explicitly.
+    runtime_sysinclude = []
     if IS_WINDOWS:
-        tcc_flags = [f'-DADDITIONAL_INCLUDE_PATH="{windows_system_include_dir().as_posix()}"']
+        runtime_sysinclude = [windows_system_include_dir().as_posix()]
 
     # Plain tcc driver. tcc.c is itself a unity ("ONE_SOURCE") build that
     # #includes libtcc.c (which in turn pulls in tccpp.c/tccgen.c/tccdbg.c/
@@ -123,7 +139,7 @@ def build():
     # mir.c/mir-gen.c/c2mir.c triple, but as a single translation unit. Built
     # first so it can self-host the runtime-library compile below.
     driver_plain = BUILD_DIR / f"tcc-driver-plain{OBJ}"
-    compile_obj(compiler_dir / "tcc.c", driver_plain, tcc_flags)
+    compile_obj(compiler_dir / "tcc.c", driver_plain, driver_defines)
     tcc_exe = BUILD_DIR / f"tcc{EXE}"
     run([ZIG, "cc", str(driver_plain), "-o", str(tcc_exe), *TCC_LIBS])
 
@@ -144,6 +160,7 @@ def build():
         run([
             str(tcc_exe), "-c", str(src), "-o", str(obj),
             "-B", str(compiler_dir), "-I", str(compiler_dir), "-I", str(config_dir),
+            *[arg for path in runtime_sysinclude for arg in ("-I", path)],
         ])
         return obj
 
@@ -172,7 +189,7 @@ def build():
 
     # Renamed driver (main -> tcc_main) linked into the mc.zig frontend
     driver_renamed = BUILD_DIR / f"tcc-driver{OBJ}"
-    compile_obj(compiler_dir / "tcc.c", driver_renamed, [*tcc_flags, "-Dmain=tcc_main"])
+    compile_obj(compiler_dir / "tcc.c", driver_renamed, [*driver_defines, "-Dmain=tcc_main"])
 
     # Build mc frontend linking Zig packages
     toml_pkg = package_dir("toml") / "src" / "root.zig"
