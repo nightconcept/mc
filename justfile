@@ -22,6 +22,9 @@ test-toolchain:
 
 test: test-legacy test-toolchain
 
+test-stress:
+    python3 tests/stress/run_stress.py
+
 # ── quality gates ─────────────────────────────────────────────────────────────
 gate:
     python3 scripts/gate.py

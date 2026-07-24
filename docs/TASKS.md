@@ -44,18 +44,20 @@ Scope note: doomgeneric is out of scope for now (deferred, not planned).
       `lua` running the compiled chunk). See `mc-mods/lua-5.4.8/PATCHES.md`.
 - [x] Pushed the `mc-mods` commits (sqlite-3.53.3, lua-5.4.8) to
       `nightconcept/mc-mods` `main`, with the user's explicit go-ahead.
+- [x] `tests/stress/run_stress.py`: clones `mc-mods` pinned to commit
+      `5156ca046bc47c8021b6b58bd3f49f7d8eee87f1` into the gitignored
+      `tests/stress/.cache/`, runs `mc build` for sqlite3 and lua/luac,
+      and smoke-tests each binary (sqlite create/insert/select; a
+      luac-compiled chunk run by lua); wired as `just test-stress` and
+      documented in `docs/testing.md`'s "Suites" section. Verified
+      passing end-to-end from a clean cache.
 
 ## Next up
 
-- [ ] `tests/stress/` Python harness: per-project fetch (pinned ref from
-      `mc-mods`) into a gitignored cache dir, `mc build`, smoke-run,
-      pass/fail report — wired as `just test-stress`.
 - [ ] tcc 3-stage bootstrap check (4th stress target): stage0 (current
       `scripts/build.py` output) compiles tcc's own sources → stage1;
       stage1 compiles them again → stage2; compare stage1/stage2 build
       output for a fixed test input as a determinism sanity check.
-- [ ] Docs/wiring once the harness exists: `docs/testing.md` "Stress
-      tests" section, `justfile` `test-stress` recipe.
 
 ## Deferred / out of scope
 

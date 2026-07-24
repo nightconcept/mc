@@ -50,6 +50,8 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - **Test legacy (vendored upstream TinyCC tests2 suite)**: `just test-legacy`
 - **Test toolchain (mc CLI, not compilation)**: `just test-toolchain`
 - **Test both, legacy first**: `just test`
+- **Stress test project-mode `mc build`**: `just test-stress` (clones
+  nightconcept/mc-mods, needs network; see `docs/testing.md`)
 - **Package**: `just package` — copies `build/mc` into `dist/`
 - **Format Zig**: `just fmt`
 - **Lint C**: `./build/mc lint <file.c>` after `just build`
@@ -62,6 +64,8 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Added `tests/stress/run_stress.py` (`just test-stress`): builds/smoke-tests
+  `mc-mods`' sqlite3 and lua/luac projects via project-mode `mc build`.
 - Pushed `mc-mods` (sqlite-3.53.3, lua-5.4.8) to `nightconcept/mc-mods`.
 - Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
   projects; verified `mc build` + a `luac`/`lua` round-trip.
@@ -69,7 +73,6 @@ entries to keep this file ≤100 lines; the detailed record lives in
   verified `mc build` produces a working `sqlite3.exe`.
 - Added a multi-`main()` guard to project-mode `mc build`.
 - Implemented project-mode `mc build` (`mc.toml` [build] -> tcc).
-- Moved `test_legacy.py`/`test_toolchain.py` from `scripts/` to `tests/`.
 
 ## Engineering Standards
 

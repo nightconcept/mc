@@ -18,6 +18,16 @@
   correctness).
 - **Both (`just test`)** — legacy first, then toolchain. Order matters:
   a broken compiler should fail before CLI-level tests run.
+- **Stress (`just test-stress`)** — `tests/stress/run_stress.py` clones
+  [nightconcept/mc-mods](https://github.com/nightconcept/mc-mods) (vendored,
+  mc-friendly copies of real-world C projects) at a pinned commit into the
+  gitignored `tests/stress/.cache/`, runs `mc build` (project-mode) in each
+  project, and smoke-tests the resulting binary. Covers the two real-world
+  problems project-mode `mc build` needs to handle: the "multiple `main()`"
+  problem (sqlite3's amalgamation + shell) and platform/entry-point source
+  selection (Lua's `lua`/`luac` sibling projects sharing one `src/`). Needs
+  a prior `just build` and network access; not part of `just test`/`gate` —
+  run it explicitly when touching project-mode `mc build`.
 
 ## Quality gates
 
