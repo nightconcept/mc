@@ -35,6 +35,8 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - [Lint](docs/lint.md) — `mc lint` checks and usage
 - [Testing](docs/testing.md) — legacy/toolchain suites, quality gates
 - [Conventions](docs/conventions.md) — commit style, code style, tool pins
+- [Tasks](docs/TASKS.md) — ongoing task tracker; check items off and log a
+  one-line summary here when done (see below)
 
 ## Essential Commands
 
@@ -54,8 +56,21 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - **Update TinyCC**: push to nightconcept/tinycc `mtc` branch, then
   `just update-tinycc`
 
+## Progress Log
+
+One line per completed `docs/TASKS.md` item, most recent first. Prune old
+entries to keep this file ≤100 lines; the detailed record lives in
+`docs/TASKS.md`.
+
+- Added a multi-`main()` guard to project-mode `mc build`.
+- Implemented project-mode `mc build` (`mc.toml` [build] -> tcc).
+- Moved `test_legacy.py`/`test_toolchain.py` from `scripts/` to `tests/`.
+
 ## Engineering Standards
 
+- Convention over configuration: `mc.toml` sections should have sensible
+  defaults that need zero config for the common case; add keys for
+  overriding the exception, not the rule.
 - Match surrounding code and avoid unrelated formatting changes.
 - Keep TinyCC updates (via `just update-tinycc`) as their own commit,
   separate from `mc`-side changes.

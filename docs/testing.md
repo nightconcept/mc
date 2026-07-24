@@ -2,17 +2,18 @@
 
 ## Suites
 
-- **Zig unit tests** — run as part of `scripts/test_toolchain.py` (and by
+- **Zig unit tests** — run as part of `tests/test_toolchain.py` (and by
   `just gate-fast`). Wires each `src/<name>/` package together via
   `--dep`/`-M` flags; see `zig_unit_tests()` in
-  `scripts/test_toolchain.py` for the exact module graph.
-- **Legacy (`just test-legacy`)** — `scripts/test_legacy.py` runs TinyCC's
-  vendored `tests/tests2/*.c` + `*.expect` suite against `build/tcc`.
-  Each `NN_name.c` is compared byte-for-byte against `NN_name.expect`,
-  usually via `tcc -run`. A handful of upstream tests use a custom
-  multi-file/`T1` Makefile recipe we haven't ported and are skipped
-  (see `SKIP_CUSTOM_RECIPE` in that script).
-- **Toolchain (`just test-toolchain`)** — `scripts/test_toolchain.py` runs
+  `tests/test_toolchain.py` for the exact module graph.
+- **Legacy (`just test-legacy`)** — `tests/test_legacy.py` runs TinyCC's
+  vendored `tests/tests2/*.c` + `*.expect` suite (upstream's own tests/
+  dir, inside the fetched tinycc source, not this repo's `tests/`) against
+  `build/tcc`. Each `NN_name.c` is compared byte-for-byte against
+  `NN_name.expect`, usually via `tcc -run`. A handful of upstream tests use
+  a custom multi-file/`T1` Makefile recipe we haven't ported and are
+  skipped (see `SKIP_CUSTOM_RECIPE` in that script).
+- **Toolchain (`just test-toolchain`)** — `tests/test_toolchain.py` runs
   Zig unit tests plus `mc` CLI smoke tests (not TinyCC compilation
   correctness).
 - **Both (`just test`)** — legacy first, then toolchain. Order matters:

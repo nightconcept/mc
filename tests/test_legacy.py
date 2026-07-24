@@ -12,6 +12,9 @@ import platform
 import re
 import subprocess
 import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from _env import BUILD_DIR, EXE, IS_WINDOWS, tinycc_dir
 
 # Tests whose Makefile recipe is a custom multi-step/multi-file build (T1/GEN

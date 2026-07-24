@@ -1,0 +1,55 @@
+# Tasks
+
+Ongoing task list for the `tests/` stress-test effort (mc.toml-driven
+project builds, exercised against real-world C codebases). Each item is
+checked off and rewritten as a one-sentence, past-tense summary of what was
+actually done; that same sentence is mirrored into `AGENTS.md`'s progress
+log as one line. Don't rewrite the sentence again later — it's a record of
+what happened, not a living description.
+
+Scope note: doomgeneric is out of scope for now (deferred, not planned).
+
+## Done
+
+- [x] Move test scripts into `tests/`: relocated `test_legacy.py`/
+      `test_toolchain.py` from `scripts/` to `tests/`, updated `justfile`,
+      `scripts/gate.py`, `scripts/dev.py`, and docs to match.
+- [x] Project-mode `mc build`: `mc build` with no args now reads `mc.toml`
+      (`[project]`/`[build]`: `sources`, `main`, `target`, `include_dirs`,
+      `defines`), resolves sources (default `src/**/*.c`), and compiles to
+      `target` (default `bin/<name>`); passthrough mode (`mc build <args>`)
+      is unchanged.
+- [x] Multi-`main()` guard: project-mode build hard-errors listing files
+      when more than one resolved source defines a top-level `main()`,
+      pointing at `build.sources`/`build.main` instead of surfacing tcc's
+      raw linker error.
+
+## Next up
+
+- [ ] Create the `mc-mods` repo (new GitHub repo, needs explicit go-ahead
+      before creating — this is a shared/external action) to hold vendored,
+      mc-patched copies of lua-5.4.8, sqlite-3.53.3 (amalgamation), each
+      with its own `mc.toml` at the project root.
+- [ ] sqlite stress case: fetch pinned sqlite-3.53.3 from `mc-mods`,
+      `mc build` the amalgamation + shell, run a smoke SQL script, diff
+      output.
+- [ ] Lua 5.4.8 stress case: patch `LUA_USE_JUMPTABLE=0` (tcc doesn't
+      support the `&&label` computed-goto GNU extension `ljumptab.h`
+      needs), two targets (`lua`, `luac`) via `build.main`, run a smoke
+      script, diff output.
+- [ ] `tests/stress/` Python harness: per-project fetch (pinned ref from
+      `mc-mods`) into a gitignored cache dir, `mc build`, smoke-run,
+      pass/fail report — wired as `just test-stress`.
+- [ ] tcc 3-stage bootstrap check (4th stress target): stage0 (current
+      `scripts/build.py` output) compiles tcc's own sources → stage1;
+      stage1 compiles them again → stage2; compare stage1/stage2 build
+      output for a fixed test input as a determinism sanity check.
+- [ ] Docs/wiring once the harness exists: `docs/testing.md` "Stress
+      tests" section, `justfile` `test-stress` recipe.
+
+## Deferred / out of scope
+
+- doomgeneric stress case — skipped for now per explicit decision; revisit
+  if/when there's a concrete reason to add a 3rd, harder external project
+  (platform-variant-file selection is already exercised well enough by
+  Lua's `lua.c`/`luac.c` two-target case).

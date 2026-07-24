@@ -6,6 +6,7 @@ const fmt_pkg = @import("fmt");
 const lint_pkg = @import("lint");
 const lsp_pkg = @import("lsp");
 const runtime_pkg = @import("runtime");
+const toml_pkg = @import("toml");
 
 extern fn tcc_main(argc: c_int, argv: [*c][*c]u8) c_int;
 
@@ -17,6 +18,7 @@ const usage =
     \\Usage:
     \\  mc file.c [args]              Compile and run (JIT via tcc)
     \\  mc run file.c -- [args]       Compile and run
+    \\  mc build                      Build the mc.toml project (reads [build])
     \\  mc build [args]               Build artifact (-c/-S/-o, ...)
     \\  mc lint [--syntax-only] file  Lint (syntax gate + clang-tidy)
     \\  mc fmt [--check] [files|.]    Format with clang-format
@@ -106,6 +108,11 @@ fn run(init: std.process.Init) !u8 {
         });
     }
 
+    if (eql(sub, "build") and args.len == 2) {
+        const cache = try prepareRuntime(arena, init.io, init.environ_map);
+        return projectBuild(arena, init.io, cache);
+    }
+
     const cache = try prepareRuntime(arena, init.io, init.environ_map);
     const routed = try route(arena, cache, args[1..]);
     var argv = try arena.alloc([*c]u8, routed.len + 1);
@@ -135,6 +142,212 @@ fn route(arena: std.mem.Allocator, cache: []const u8, args: []const [:0]const u8
         }
     }
     return out.toOwnedSlice(arena);
+}
+
+/// `mc build` with no args: read mc.toml's [project]/[build] sections,
+/// Join `base` with a `mc.toml`-supplied relative path, which always uses
+/// `/` regardless of host OS (TOML convention) — split on `/` first so each
+/// segment joins with the native separator instead of becoming one literal
+/// component (which would silently mismatch a native-path built elsewhere,
+/// e.g. by a directory walker, on Windows).
+fn joinRelative(arena: std.mem.Allocator, base: []const u8, rel: []const u8) ![]const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    try parts.append(arena, base);
+    var it = std.mem.splitScalar(u8, rel, '/');
+    while (it.next()) |part| {
+        if (part.len == 0) continue;
+        try parts.append(arena, part);
+    }
+    return std.fs.path.join(arena, parts.items);
+}
+
+/// resolve `sources` (default `src/**/*.c`), and compile to `target`
+/// (default `bin/<name>[.exe]`) via the embedded tcc.
+fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
+    var stderr_buf: [1024]u8 = undefined;
+    var stderr = Io.File.stderr().writer(io, &stderr_buf);
+
+    const project_root = try findProjectRoot(io, arena);
+    const toml_path = try std.fs.path.join(arena, &.{ project_root, "mc.toml" });
+    if (!fmt_pkg.fileExists(io, toml_path)) {
+        try stderr.interface.writeAll(
+            "mc build: no mc.toml found in this directory or its parents\n" ++
+                "Run `mc init` to scaffold one, or pass file(s) directly: mc build file.c -o out\n",
+        );
+        try stderr.interface.flush();
+        return 1;
+    }
+
+    const toml_src = try Io.Dir.cwd().readFileAlloc(io, toml_path, arena, .unlimited);
+    var doc = toml_pkg.parse(toml_src, arena) catch {
+        try stderr.interface.writeAll("mc build: failed to parse mc.toml\n");
+        try stderr.interface.flush();
+        return 1;
+    };
+    defer doc.deinit();
+
+    const build_sec = doc.section("build");
+    const project_sec = doc.section("project");
+
+    var sources: std.ArrayList([]const u8) = .empty;
+    if (build_sec) |b| {
+        if (b.getArray("sources")) |patterns| {
+            for (patterns) |pat| try resolveSourcePattern(arena, io, project_root, pat, &sources);
+        }
+    }
+    if (sources.items.len == 0) {
+        try defaultSources(arena, io, project_root, &sources);
+    }
+
+    if (sources.items.len == 0) {
+        try stderr.interface.writeAll(
+            "mc build: no source files found (checked build.sources in mc.toml, default src/**/*.c)\n",
+        );
+        try stderr.interface.flush();
+        return 1;
+    }
+
+    // build.main is an explicit override for which file owns main() — skips
+    // the auto-detection guard below entirely (convention over
+    // configuration: the common case needs no [build] section at all, but
+    // an ambiguous source tree can name the file that decides it).
+    const explicit_main = if (build_sec) |b| b.getString("main") else null;
+    if (explicit_main) |m| {
+        const full = try joinRelative(arena, project_root, m);
+        var already = false;
+        for (sources.items) |s| {
+            if (std.mem.eql(u8, s, full)) {
+                already = true;
+                break;
+            }
+        }
+        if (!already) try sources.append(arena, full);
+    } else {
+        // Multiple main()s across the resolved source set can't link into
+        // one binary; point the user at build.sources/build.main rather
+        // than letting tcc's linker error speak for itself.
+        var main_files: std.ArrayList([]const u8) = .empty;
+        for (sources.items) |s| {
+            if (try countMainDefs(io, s, arena) > 0) try main_files.append(arena, s);
+        }
+        if (main_files.items.len > 1) {
+            try stderr.interface.writeAll(
+                "mc build: multiple files define main() - narrow build.sources or set build.main in mc.toml:\n",
+            );
+            for (main_files.items) |f| try stderr.interface.print("  {s}\n", .{f});
+            try stderr.interface.flush();
+            return 1;
+        }
+        if (main_files.items.len == 0) {
+            try stderr.interface.writeAll("mc build: no file defines main() among resolved sources\n");
+            try stderr.interface.flush();
+            return 1;
+        }
+    }
+
+    const name = if (project_sec) |p| p.getString("name") orelse "a" else "a";
+    const exe_suffix = if (builtin.os.tag == .windows) ".exe" else "";
+    const default_target = try std.fmt.allocPrint(arena, "bin/{s}{s}", .{ name, exe_suffix });
+    const target_rel = if (build_sec) |b| b.getString("target") orelse default_target else default_target;
+    const target_path = try joinRelative(arena, project_root, target_rel);
+
+    if (std.fs.path.dirname(target_path)) |target_dir| {
+        try Io.Dir.createDirPath(.cwd(), io, target_dir);
+    }
+
+    var tcc_argv: std.ArrayList([:0]const u8) = .empty;
+    try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-B{s}", .{cache}, 0));
+
+    if (build_sec) |b| {
+        if (b.getArray("include_dirs")) |dirs| {
+            for (dirs) |d| {
+                const full = try joinRelative(arena, project_root, d);
+                try tcc_argv.append(arena, "-I");
+                try tcc_argv.append(arena, try arena.dupeZ(u8, full));
+            }
+        }
+        if (b.getArray("defines")) |defs| {
+            for (defs) |d| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-D{s}", .{d}, 0));
+        }
+    }
+
+    for (sources.items) |s| try tcc_argv.append(arena, try arena.dupeZ(u8, s));
+    try tcc_argv.append(arena, "-o");
+    try tcc_argv.append(arena, try arena.dupeZ(u8, target_path));
+
+    var argv_buf = try arena.alloc([*c]u8, tcc_argv.items.len + 1);
+    argv_buf[0] = @constCast("mc");
+    for (tcc_argv.items, 1..) |arg, i| argv_buf[i] = @constCast(arg.ptr);
+    const rc = tcc_main(@intCast(argv_buf.len), argv_buf.ptr);
+    if (rc == 0) {
+        var stdout_buf: [512]u8 = undefined;
+        var stdout = Io.File.stdout().writer(io, &stdout_buf);
+        try stdout.interface.print("Built {s}\n", .{target_rel});
+        try stdout.interface.flush();
+    }
+    return @intCast(rc);
+}
+
+/// Recursively collect `*.c` files under `<project_root>/src` (fallback when
+/// `mc.toml` sets no `build.sources`).
+fn defaultSources(arena: std.mem.Allocator, io: Io, project_root: []const u8, out: *std.ArrayList([]const u8)) !void {
+    const src_dir = try std.fs.path.join(arena, &.{ project_root, "src" });
+    var dir = Io.Dir.cwd().openDir(io, src_dir, .{ .iterate = true }) catch return;
+    defer dir.close(io);
+    var walker = try dir.walk(arena);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.basename, ".c")) continue;
+        try out.append(arena, try std.fs.path.join(arena, &.{ src_dir, entry.path }));
+    }
+}
+
+/// Resolve one `build.sources` entry. Plain paths are used as-is; any
+/// pattern containing `*` (`src/*.c`, `src/**/*.c`) walks the directory
+/// portion before the first `*` recursively, keeping files with the
+/// pattern's suffix (usually `.c`). This is not full glob syntax — it's
+/// enough to let a project pick one platform-variant file over another by
+/// listing it explicitly instead of a wildcard.
+fn resolveSourcePattern(
+    arena: std.mem.Allocator,
+    io: Io,
+    project_root: []const u8,
+    pattern: []const u8,
+    out: *std.ArrayList([]const u8),
+) !void {
+    const star = std.mem.indexOfScalar(u8, pattern, '*') orelse {
+        try out.append(arena, try joinRelative(arena, project_root, pattern));
+        return;
+    };
+    const dir_part = if (std.mem.lastIndexOfScalar(u8, pattern[0..star], '/')) |slash| pattern[0..slash] else ".";
+    const suffix = if (std.mem.endsWith(u8, pattern, ".c")) ".c" else "";
+    const full_dir = try joinRelative(arena, project_root, dir_part);
+
+    var dir = Io.Dir.cwd().openDir(io, full_dir, .{ .iterate = true }) catch return;
+    defer dir.close(io);
+    var walker = try dir.walk(arena);
+    defer walker.deinit();
+    while (try walker.next(io)) |entry| {
+        if (entry.kind != .file) continue;
+        if (suffix.len > 0 and !std.mem.endsWith(u8, entry.basename, suffix)) continue;
+        try out.append(arena, try std.fs.path.join(arena, &.{ full_dir, entry.path }));
+    }
+}
+
+/// Cheap top-level `int main(`/`int main (` line scan — good enough to catch
+/// the common "multiple mains in one source set" mistake without a real
+/// C parser.
+fn countMainDefs(io: Io, path: []const u8, arena: std.mem.Allocator) !usize {
+    const content = Io.Dir.cwd().readFileAlloc(io, path, arena, .unlimited) catch return 0;
+    var count: usize = 0;
+    var it = std.mem.splitScalar(u8, content, '\n');
+    while (it.next()) |line| {
+        const trimmed = std.mem.trim(u8, line, " \t\r");
+        if (std.mem.startsWith(u8, trimmed, "int main(") or std.mem.startsWith(u8, trimmed, "int main (")) {
+            count += 1;
+        }
+    }
+    return count;
 }
 
 fn cachePathFor(
@@ -223,7 +436,9 @@ fn initScaffold(
         \\# c_standard   = "c11"          # -std= flag
         \\# include_dirs = ["include"]    # -I flags
         \\# defines      = []             # -D flags: ["FOO=1"]
-        \\# sources      = ["src/**/*.c"] # glob patterns (used by lint + lsp)
+        \\# sources      = ["src/**/*.c"] # source files for `mc build` (default: src/**/*.c)
+        \\# main         = "src/main.c"   # explicit main() file, for source trees with more than one
+        \\# target       = "bin/myproject" # output binary path (default: bin/<name>)
         \\
         \\[fmt]
         \\# All keys mirror clang-format YAML names.

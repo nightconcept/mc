@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = Path(__file__).parent
+TESTS = REPO_ROOT / "tests"
 
 ZIG_SOURCES = [
     "src/cli/mc.zig",
@@ -27,6 +28,10 @@ def _py(script, *args):
     _run([sys.executable, str(SCRIPTS / script), *args])
 
 
+def _test(script, *args):
+    _run([sys.executable, str(TESTS / script), *args])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -44,14 +49,14 @@ def main():
     # so even the fast unit-test path needs one prior build to exist.
     if not (REPO_ROOT / "build" / "mc-runtime.tar").exists():
         _py("build.py")
-    _py("test_toolchain.py", "--unit-only")
+    _test("test_toolchain.py", "--unit-only")
 
     if args.fast:
         return
 
     _py("build.py")
-    _py("test_legacy.py")
-    _py("test_toolchain.py")
+    _test("test_legacy.py")
+    _test("test_toolchain.py")
 
 
 if __name__ == "__main__":

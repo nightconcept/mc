@@ -7,6 +7,8 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from _env import BUILD_DIR, CLI_SRC, EXE, IS_WINDOWS, ROOT, ZIG, package_dir, run
 
 
@@ -14,7 +16,7 @@ def zig_unit_tests():
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "test",
-        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime",
+        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",

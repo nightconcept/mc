@@ -3,7 +3,7 @@
 ## Layout
 
 - Root — workspace tooling only: `justfile`, `mise.toml`, `build.zig`,
-  `build.zig.zon`, `scripts/`
+  `build.zig.zon`, `scripts/`, `tests/`
 - `src/cli/mc.zig` — the `mc` frontend: parses the subcommand and dispatches
   to the matching package, or falls through to the raw `tcc` driver
 - `src/fmt/format.zig` — `mc fmt` (clang-format wrapper)
@@ -41,5 +41,5 @@ comments in `scripts/build.py` if you're touching that path.
 ## Package boundaries
 
 Each `src/<name>/` package is a separate Zig module wired together via
-`--dep`/`-M` flags in `build.zig` and in `scripts/test_toolchain.py`'s
+`--dep`/`-M` flags in `build.zig` and in `tests/test_toolchain.py`'s
 `zig_unit_tests()`. When adding a new package, wire it in both places.

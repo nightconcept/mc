@@ -26,6 +26,7 @@ Or route to an explicit subcommand:
 
 ```sh
 mc run file.c -- [args]       # compile and run (JIT via tcc)
+mc build                      # build the mc.toml project (reads [build])
 mc build [args]               # build artifact (-c/-S/-o, ...)
 mc lint [--syntax-only] file  # lint (syntax gate + clang-tidy)
 mc fmt [--check] [files|.]    # format with clang-format

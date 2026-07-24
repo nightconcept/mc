@@ -15,10 +15,10 @@ package:
 
 # ── test ──────────────────────────────────────────────────────────────────────
 test-legacy:
-    python3 scripts/test_legacy.py
+    python3 tests/test_legacy.py
 
 test-toolchain:
-    python3 scripts/test_toolchain.py
+    python3 tests/test_toolchain.py
 
 test: test-legacy test-toolchain
 

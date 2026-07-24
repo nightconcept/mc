@@ -229,7 +229,7 @@ def build():
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "build-exe", "-O", "ReleaseSafe", f"-femit-bin=build/mc{EXE}",
-        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime",
+        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
