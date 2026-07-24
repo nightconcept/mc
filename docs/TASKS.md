@@ -23,20 +23,31 @@ Scope note: doomgeneric is out of scope for now (deferred, not planned).
       when more than one resolved source defines a top-level `main()`,
       pointing at `build.sources`/`build.main` instead of surfacing tcc's
       raw linker error.
+- [x] Cloned `mc-mods` (https://github.com/nightconcept/mc-mods.git,
+      already existed empty) to `../mc-mods` and vendored sqlite-3.53.3
+      (amalgamation + shell) with an mc.toml; needed one tcc-compat patch
+      to `shell.c`'s Windows `fsdir` dirent shim (rewritten on plain
+      Win32 `FindFirstFileW`/`FindNextFileW` since tcc's `msvcrt.def`
+      doesn't export the CRT wide find-file symbols `<io.h>` expands to)
+      plus `SQLITE_DISABLE_INTRINSIC` (tcc lacks MSVC's `__umulh`);
+      verified `mc build` produces a working `sqlite3.exe` (create/
+      insert/select smoke-tested). See `mc-mods/sqlite-3.53.3/PATCHES.md`.
+- [x] Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
+      projects sharing one `src/` (each listing the shared core+library
+      sources explicitly, matching upstream `src/Makefile`'s
+      `CORE_O`/`LIB_O`, plus their own main()-owning file) — a single
+      mc.toml can't build both `lua.c` and `luac.c`'s binaries at once.
+      No source patches needed; both set `LUA_USE_JUMPTABLE=0` via
+      `build.defines` since tcc defines `__GNUC__` but not the GNU
+      computed-goto extension lvm.c's default dispatch wants. Verified
+      `mc build` for both and a `lua`/`luac` round-trip (`luac -o` then
+      `lua` running the compiled chunk). See `mc-mods/lua-5.4.8/PATCHES.md`.
 
 ## Next up
 
-- [ ] Create the `mc-mods` repo (new GitHub repo, needs explicit go-ahead
-      before creating — this is a shared/external action) to hold vendored,
-      mc-patched copies of lua-5.4.8, sqlite-3.53.3 (amalgamation), each
-      with its own `mc.toml` at the project root.
-- [ ] sqlite stress case: fetch pinned sqlite-3.53.3 from `mc-mods`,
-      `mc build` the amalgamation + shell, run a smoke SQL script, diff
-      output.
-- [ ] Lua 5.4.8 stress case: patch `LUA_USE_JUMPTABLE=0` (tcc doesn't
-      support the `&&label` computed-goto GNU extension `ljumptab.h`
-      needs), two targets (`lua`, `luac`) via `build.main`, run a smoke
-      script, diff output.
+- [ ] Push the `mc-mods` commits (sqlite-3.53.3, lua-5.4.8) to the
+      `nightconcept/mc-mods` remote — needs explicit go-ahead, pushing to
+      a shared/external repo.
 - [ ] `tests/stress/` Python harness: per-project fetch (pinned ref from
       `mc-mods`) into a gitignored cache dir, `mc build`, smoke-run,
       pass/fail report — wired as `just test-stress`.
