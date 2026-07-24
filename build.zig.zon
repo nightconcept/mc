@@ -8,7 +8,7 @@
         },
         .tinycc = .{
             .url = "https://github.com/nightconcept/tinycc/archive/refs/heads/mtc.tar.gz",
-            .hash = "N-V-__8AAKIDRgD5ta9q5_0KPrA5RvX2eXSACHETzrCrPfGH",
+            .hash = "N-V-__8AANwKRgAqu4eI5Fh8bwMkX7bHOT1jFWpMAfucQjsc",
         },
     },
     .paths = .{""},
