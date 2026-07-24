@@ -137,18 +137,25 @@ fn route(arena: std.mem.Allocator, cache: []const u8, args: []const [:0]const u8
     return out.toOwnedSlice(arena);
 }
 
-fn prepareRuntime(arena: std.mem.Allocator, io: Io, env: *const std.process.Environ.Map) ![]const u8 {
-    const cache = if (env.get("MC_RUNTIME_CACHE_DIR")) |path|
-        path
-    else blk: {
-        const base = switch (builtin.os.tag) {
-            .windows => env.get("LOCALAPPDATA") orelse return error.MissingCacheDirectory,
-            .macos => try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, "Library", "Caches" }),
-            else => env.get("XDG_CACHE_HOME") orelse try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, ".cache" }),
-        };
-        const target = try std.fmt.allocPrint(arena, "{s}-{s}-{s}", .{ tcc_version, @tagName(builtin.cpu.arch), @tagName(builtin.os.tag) });
-        break :blk try std.fs.path.join(arena, &.{ base, "mc", target });
+fn cachePathFor(
+    arena: std.mem.Allocator,
+    env: *const std.process.Environ.Map,
+    os_tag: std.Target.Os.Tag,
+    arch_name: []const u8,
+) ![]const u8 {
+    if (env.get("MC_RUNTIME_CACHE_DIR")) |path| return path;
+
+    const base = switch (os_tag) {
+        .windows => env.get("LOCALAPPDATA") orelse return error.MissingCacheDirectory,
+        .macos => try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, "Library", "Caches" }),
+        else => env.get("XDG_CACHE_HOME") orelse try std.fs.path.join(arena, &.{ env.get("HOME") orelse return error.MissingCacheDirectory, ".cache" }),
     };
+    const target = try std.fmt.allocPrint(arena, "{s}-{s}-{s}", .{ tcc_version, arch_name, @tagName(os_tag) });
+    return try std.fs.path.join(arena, &.{ base, "mc", target });
+}
+
+fn prepareRuntime(arena: std.mem.Allocator, io: Io, env: *const std.process.Environ.Map) ![]const u8 {
+    const cache = try cachePathFor(arena, env, builtin.os.tag, @tagName(builtin.cpu.arch));
 
     const marker = try std.fs.path.join(arena, &.{ cache, ".complete" });
     Io.Dir.access(.cwd(), io, marker, .{}) catch |err| switch (err) {
@@ -289,4 +296,99 @@ test "routes commands" {
     try std.testing.expectEqualStrings("-run", run_args[1]);
     try std.testing.expectEqualStrings("hello.c", run_args[2]);
     try std.testing.expectEqualStrings("one", run_args[3]);
+}
+
+test "route rejects run with no source file" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    try std.testing.expectError(error.MissingSourceFile, route(arena, "/cache", &.{"run"}));
+}
+
+test "cachePathFor honors MC_RUNTIME_CACHE_DIR override" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("MC_RUNTIME_CACHE_DIR", "/custom/cache");
+
+    const path = try cachePathFor(arena, &env, .linux, "x86_64");
+    try std.testing.expectEqualStrings("/custom/cache", path);
+}
+
+test "cachePathFor derives windows cache from LOCALAPPDATA" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("LOCALAPPDATA", "C:\\Users\\me\\AppData\\Local");
+
+    const path = try cachePathFor(arena, &env, .windows, "x86_64");
+    const target = try std.fmt.allocPrint(arena, "{s}-x86_64-windows", .{tcc_version});
+    const expected = try std.fs.path.join(arena, &.{ "C:\\Users\\me\\AppData\\Local", "mc", target });
+    try std.testing.expectEqualStrings(expected, path);
+}
+
+test "cachePathFor derives macos cache from HOME" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("HOME", "/Users/me");
+
+    const path = try cachePathFor(arena, &env, .macos, "aarch64");
+    const target = try std.fmt.allocPrint(arena, "{s}-aarch64-macos", .{tcc_version});
+    const expected = try std.fs.path.join(arena, &.{ "/Users/me", "Library", "Caches", "mc", target });
+    try std.testing.expectEqualStrings(expected, path);
+}
+
+test "cachePathFor uses XDG_CACHE_HOME over HOME on linux" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("HOME", "/home/me");
+    try env.put("XDG_CACHE_HOME", "/home/me/.xdgcache");
+
+    const path = try cachePathFor(arena, &env, .linux, "x86_64");
+    const target = try std.fmt.allocPrint(arena, "{s}-x86_64-linux", .{tcc_version});
+    const expected = try std.fs.path.join(arena, &.{ "/home/me/.xdgcache", "mc", target });
+    try std.testing.expectEqualStrings(expected, path);
+}
+
+test "cachePathFor falls back to HOME/.cache on linux" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+    try env.put("HOME", "/home/me");
+
+    const path = try cachePathFor(arena, &env, .linux, "x86_64");
+    const target = try std.fmt.allocPrint(arena, "{s}-x86_64-linux", .{tcc_version});
+    const expected = try std.fs.path.join(arena, &.{ "/home/me", ".cache", "mc", target });
+    try std.testing.expectEqualStrings(expected, path);
+}
+
+test "cachePathFor errors without required env vars" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const arena = arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(std.testing.allocator);
+    defer env.deinit();
+
+    try std.testing.expectError(error.MissingCacheDirectory, cachePathFor(arena, &env, .windows, "x86_64"));
+    try std.testing.expectError(error.MissingCacheDirectory, cachePathFor(arena, &env, .macos, "x86_64"));
+    try std.testing.expectError(error.MissingCacheDirectory, cachePathFor(arena, &env, .linux, "x86_64"));
 }
