@@ -26,4 +26,4 @@ __pycache__/
 /zig-out/
 
 # Stress-test harness's mc-mods checkout (fetched on demand)
-/tests/stress/.cache/
+/tests/.cache/
