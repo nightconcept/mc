@@ -56,7 +56,15 @@ pub const Document = struct {
 
     pub fn deinit(self: *Document) void {
         for (self.tables) |*table| {
+            var val_it = table.entries.valueIterator();
+            while (val_it.next()) |v| {
+                switch (v.*) {
+                    .array => |a| self.allocator.free(a),
+                    else => {},
+                }
+            }
             table.entries.deinit(self.allocator);
+            self.allocator.free(table.section);
         }
         self.allocator.free(self.tables);
         self.parsed.deinit();
@@ -94,24 +102,8 @@ pub fn parse(source: []const u8, allocator: std.mem.Allocator) ParseError!Docume
 
     var it = parsed.value.iterator();
     while (it.next()) |entry| {
-        const sec_name = entry.key_ptr.*;
         switch (entry.value_ptr.*) {
-            .table => |sec_table| {
-                var entries: std.StringHashMapUnmanaged(Value) = .empty;
-                errdefer entries.deinit(allocator);
-
-                var sec_it = sec_table.iterator();
-                while (sec_it.next()) |kv| {
-                    const key = kv.key_ptr.*;
-                    const val = try convertValue(kv.value_ptr.*, allocator);
-                    try entries.put(allocator, key, val);
-                }
-
-                try tables.append(allocator, .{
-                    .section = sec_name,
-                    .entries = entries,
-                });
-            },
+            .table => |sec_table| try collectTable(allocator, entry.key_ptr.*, sec_table, &tables),
             else => {},
         }
     }
@@ -121,6 +113,40 @@ pub fn parse(source: []const u8, allocator: std.mem.Allocator) ParseError!Docume
         .allocator = allocator,
         .parsed = parsed,
     };
+}
+
+/// Flatten one TOML table into a `Table` named `name` (its non-table keys)
+/// plus one recursive `Table` per nested sub-table, dotted onto `name`
+/// (`[build.lua]` becomes a section literally named `"build.lua"`, found
+/// via `Document.section("build.lua")`).
+fn collectTable(
+    allocator: std.mem.Allocator,
+    name: []const u8,
+    table: *sam701_toml.Table,
+    out: *std.ArrayList(Table),
+) error{OutOfMemory}!void {
+    var entries: std.StringHashMapUnmanaged(Value) = .empty;
+    errdefer entries.deinit(allocator);
+
+    var it = table.iterator();
+    while (it.next()) |kv| {
+        switch (kv.value_ptr.*) {
+            .table => |nested| {
+                const nested_name = try std.fmt.allocPrint(allocator, "{s}.{s}", .{ name, kv.key_ptr.* });
+                defer allocator.free(nested_name);
+                try collectTable(allocator, nested_name, nested, out);
+            },
+            else => {
+                const val = try convertValue(kv.value_ptr.*, allocator);
+                try entries.put(allocator, kv.key_ptr.*, val);
+            },
+        }
+    }
+
+    try out.append(allocator, .{
+        .section = try allocator.dupe(u8, name),
+        .entries = entries,
+    });
 }
 
 fn convertValue(val: sam701_toml.Value, allocator: std.mem.Allocator) error{OutOfMemory}!Value {
@@ -164,4 +190,36 @@ test "parse basic mc.toml" {
 
     const fmt_sec = doc.section("fmt").?;
     try std.testing.expectEqual(@as(i64, 120), fmt_sec.get("ColumnLimit").?.asInteger().?);
+}
+
+test "parse nested [build.<name>] sub-tables" {
+    const src =
+        \\[project]
+        \\name = "lua"
+        \\
+        \\[build]
+        \\outputs = ["lua", "luac"]
+        \\defines = ["LUA_USE_JUMPTABLE=0"]
+        \\
+        \\[build.lua]
+        \\main = "src/lua.c"
+        \\
+        \\[build.luac]
+        \\main = "src/luac.c"
+        \\
+    ;
+    var doc = try parse(src, std.testing.allocator);
+    defer doc.deinit();
+
+    const build_sec = doc.section("build").?;
+    try std.testing.expectEqualStrings("LUA_USE_JUMPTABLE=0", build_sec.getArray("defines").?[0]);
+    try std.testing.expectEqualStrings("lua", build_sec.getArray("outputs").?[0]);
+    try std.testing.expectEqualStrings("luac", build_sec.getArray("outputs").?[1]);
+    // [build.lua] must not leak into [build]'s own entries as a mangled value.
+    try std.testing.expect(build_sec.get("lua") == null);
+
+    const lua_sec = doc.section("build.lua").?;
+    try std.testing.expectEqualStrings("src/lua.c", lua_sec.getString("main").?);
+    const luac_sec = doc.section("build.luac").?;
+    try std.testing.expectEqualStrings("src/luac.c", luac_sec.getString("main").?);
 }

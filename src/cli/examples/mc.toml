@@ -15,6 +15,15 @@ authors = []
 # sources      = ["src/**/*.c"] # Source files for `mc build` (default: src/**/*.c)
 # main         = "src/main.c"   # Explicit main() file, for source trees with more than one
 # target       = "bin/myproject" # Output binary path (default: bin/<name>)
+#
+# outputs = ["a", "b"]          # Build multiple binaries from one mc.toml.
+# Each name gets its own [build.<name>] section (main/sources/target),
+# inheriting any keys it doesn't set (defines, include_dirs, ...) from
+# [build] above.
+# [build.a]
+# main = "src/a_main.c"
+# [build.b]
+# main = "src/b_main.c"
 
 [fmt]
 # All keys mirror clang-format YAML names exactly.

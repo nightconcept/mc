@@ -161,6 +161,27 @@ fn joinRelative(arena: std.mem.Allocator, base: []const u8, rel: []const u8) ![]
     return std.fs.path.join(arena, parts.items);
 }
 
+/// A `[build]` view that checks a named child section (`[build.<name>]`)
+/// before falling back to the top-level `[build]` table, so a multi-output
+/// project can share `defines`/`include_dirs`/`c_standard` across outputs
+/// while overriding `sources`/`main`/`target` per output.
+const BuildView = struct {
+    child: ?*const toml_pkg.Table,
+    parent: ?*const toml_pkg.Table,
+
+    fn getString(self: BuildView, key: []const u8) ?[]const u8 {
+        if (self.child) |c| if (c.getString(key)) |v| return v;
+        if (self.parent) |p| if (p.getString(key)) |v| return v;
+        return null;
+    }
+
+    fn getArray(self: BuildView, key: []const u8) ?[]const []const u8 {
+        if (self.child) |c| if (c.getArray(key)) |v| return v;
+        if (self.parent) |p| if (p.getArray(key)) |v| return v;
+        return null;
+    }
+};
+
 /// resolve `sources` (default `src/**/*.c`), and compile to `target`
 /// (default `bin/<name>[.exe]`) via the embedded tcc.
 fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
@@ -188,12 +209,48 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
 
     const build_sec = doc.section("build");
     const project_sec = doc.section("project");
+    const name = if (project_sec) |p| p.getString("name") orelse "a" else "a";
 
-    var sources: std.ArrayList([]const u8) = .empty;
-    if (build_sec) |b| {
-        if (b.getArray("sources")) |patterns| {
-            for (patterns) |pat| try resolveSourcePattern(arena, io, project_root, pat, &sources);
+    // build.outputs turns one mc.toml into N child builds ([build.<name>]
+    // per entry), each inheriting shared keys (defines, include_dirs, ...)
+    // from [build] but resolving sources/main/target from its own section
+    // first. Without build.outputs, [build] itself is the single build.
+    const outputs = if (build_sec) |b| b.getArray("outputs") else null;
+    if (outputs) |names| {
+        if (names.len == 0) {
+            try stderr.interface.writeAll("mc build: build.outputs is empty in mc.toml\n");
+            try stderr.interface.flush();
+            return 1;
         }
+        for (names) |out_name| {
+            const child_name = try std.fmt.allocPrint(arena, "build.{s}", .{out_name});
+            const view: BuildView = .{ .child = doc.section(child_name), .parent = build_sec };
+            const rc = try buildOne(arena, io, cache, &stderr, project_root, view, out_name);
+            if (rc != 0) return rc;
+        }
+        return 0;
+    }
+
+    const view: BuildView = .{ .child = build_sec, .parent = null };
+    return try buildOne(arena, io, cache, &stderr, project_root, view, name);
+}
+
+/// Runs one resolve-sources/find-main/link-target build (either the sole
+/// `[build]` in a project, or one `[build.<name>]` of a multi-output one).
+/// `default_name` names the binary when `target` isn't set: the project
+/// name for a single build, the output name for a multi-output one.
+fn buildOne(
+    arena: std.mem.Allocator,
+    io: Io,
+    cache: []const u8,
+    stderr: anytype,
+    project_root: []const u8,
+    view: BuildView,
+    default_name: []const u8,
+) !u8 {
+    var sources: std.ArrayList([]const u8) = .empty;
+    if (view.getArray("sources")) |patterns| {
+        for (patterns) |pat| try resolveSourcePattern(arena, io, project_root, pat, &sources);
     }
     if (sources.items.len == 0) {
         try defaultSources(arena, io, project_root, &sources);
@@ -211,7 +268,7 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
     // the auto-detection guard below entirely (convention over
     // configuration: the common case needs no [build] section at all, but
     // an ambiguous source tree can name the file that decides it).
-    const explicit_main = if (build_sec) |b| b.getString("main") else null;
+    const explicit_main = view.getString("main");
     if (explicit_main) |m| {
         const full = try joinRelative(arena, project_root, m);
         var already = false;
@@ -245,10 +302,9 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
         }
     }
 
-    const name = if (project_sec) |p| p.getString("name") orelse "a" else "a";
     const exe_suffix = if (builtin.os.tag == .windows) ".exe" else "";
-    const default_target = try std.fmt.allocPrint(arena, "bin/{s}{s}", .{ name, exe_suffix });
-    const target_rel = if (build_sec) |b| b.getString("target") orelse default_target else default_target;
+    const default_target = try std.fmt.allocPrint(arena, "bin/{s}{s}", .{ default_name, exe_suffix });
+    const target_rel = view.getString("target") orelse default_target;
     const target_path = try joinRelative(arena, project_root, target_rel);
 
     if (std.fs.path.dirname(target_path)) |target_dir| {
@@ -258,17 +314,15 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
     var tcc_argv: std.ArrayList([:0]const u8) = .empty;
     try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-B{s}", .{cache}, 0));
 
-    if (build_sec) |b| {
-        if (b.getArray("include_dirs")) |dirs| {
-            for (dirs) |d| {
-                const full = try joinRelative(arena, project_root, d);
-                try tcc_argv.append(arena, "-I");
-                try tcc_argv.append(arena, try arena.dupeZ(u8, full));
-            }
+    if (view.getArray("include_dirs")) |dirs| {
+        for (dirs) |d| {
+            const full = try joinRelative(arena, project_root, d);
+            try tcc_argv.append(arena, "-I");
+            try tcc_argv.append(arena, try arena.dupeZ(u8, full));
         }
-        if (b.getArray("defines")) |defs| {
-            for (defs) |d| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-D{s}", .{d}, 0));
-        }
+    }
+    if (view.getArray("defines")) |defs| {
+        for (defs) |d| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-D{s}", .{d}, 0));
     }
 
     for (sources.items) |s| try tcc_argv.append(arena, try arena.dupeZ(u8, s));
@@ -439,6 +493,12 @@ fn initScaffold(
         \\# sources      = ["src/**/*.c"] # source files for `mc build` (default: src/**/*.c)
         \\# main         = "src/main.c"   # explicit main() file, for source trees with more than one
         \\# target       = "bin/myproject" # output binary path (default: bin/<name>)
+        \\#
+        \\# outputs = ["a", "b"]          # build multiple binaries from one mc.toml
+        \\# [build.a]
+        \\# main = "src/a_main.c"
+        \\# [build.b]
+        \\# main = "src/b_main.c"
         \\
         \\[fmt]
         \\# All keys mirror clang-format YAML names.

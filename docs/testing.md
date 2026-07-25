@@ -18,16 +18,20 @@
   correctness).
 - **Both (`just test`)** — legacy first, then toolchain. Order matters:
   a broken compiler should fail before CLI-level tests run.
-- **Stress (`just test-stress`)** — `tests/stress/run_stress.py` clones
+- **Stress (`just test-stress`)** — `tests/test_stress.py` clones
   [nightconcept/mc-mods](https://github.com/nightconcept/mc-mods) (vendored,
   mc-friendly copies of real-world C projects) at a pinned commit into the
-  gitignored `tests/stress/.cache/`, runs `mc build` (project-mode) in each
+  gitignored `tests/.cache/`, runs `mc build` (project-mode) in each
   project, and smoke-tests the resulting binary. Covers the two real-world
   problems project-mode `mc build` needs to handle: the "multiple `main()`"
-  problem (sqlite3's amalgamation + shell) and platform/entry-point source
-  selection (Lua's `lua`/`luac` sibling projects sharing one `src/`). Needs
-  a prior `just build` and network access; not part of `just test`/`gate` —
-  run it explicitly when touching project-mode `mc build`.
+  problem (sqlite3's amalgamation + shell) and multi-binary source sharing
+  (Lua's `lua`/`luac`, via `build.outputs` in `lua-5.4.8/mc.toml`). Also
+  runs a three-stage self-hosting bootstrap on a vendored TinyCC checkout
+  (`tinycc-<commit>/`): `mc build` (mc's embedded tcc) produces tcc #1,
+  tcc #1 compiles the same `tcc.c` into tcc #2, tcc #2 compiles it again
+  into tcc #3 — tcc #2 and #3 must come out byte-identical. Needs a prior
+  `just build` and network access; not part of `just test`/`gate` — run it
+  explicitly when touching project-mode `mc build`.
 
 ## Quality gates
 

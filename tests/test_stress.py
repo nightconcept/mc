@@ -1,17 +1,24 @@
 #!/usr/bin/env python3
 """Stress-test harness: fetches the pinned mc-mods projects and builds/smoke-tests
 each one with `mc build`, verifying the resulting binaries actually work."""
+import os
 import subprocess
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from _env import ROOT, BUILD_DIR, EXE, run
 
 MC_MODS_URL = "https://github.com/nightconcept/mc-mods.git"
 MC_MODS_REF = "5156ca046bc47c8021b6b58bd3f49f7d8eee87f1"
-CACHE_DIR = ROOT / "tests" / "stress" / ".cache" / "mc-mods"
+CACHE_DIR = ROOT / "tests" / ".cache" / "mc-mods"
 MC = BUILD_DIR / f"mc{EXE}"
+
+# Isolated from the user's real ~/.cache (or %LOCALAPPDATA%) mc runtime cache:
+# fixed and known ahead of time so smoke_tcc_bootstrap can pass the same -B
+# path to the tcc binaries it builds, without reimplementing mc.zig's
+# cachePathFor platform logic in Python.
+TCC_RUNTIME_CACHE = ROOT / "tests" / ".cache" / "mc-runtime"
 
 
 def fetch_mc_mods():
@@ -22,8 +29,8 @@ def fetch_mc_mods():
     run(["git", "checkout", MC_MODS_REF], cwd=CACHE_DIR)
 
 
-def mc_build(project_dir):
-    subprocess.run([str(MC), "build"], cwd=project_dir, check=True)
+def mc_build(project_dir, env=None):
+    subprocess.run([str(MC), "build"], cwd=project_dir, check=True, env=env)
 
 
 def smoke_sqlite():
@@ -47,15 +54,12 @@ def smoke_sqlite():
 
 def smoke_lua():
     project = CACHE_DIR / "lua-5.4.8"
-    lua_dir = project / "lua"
-    luac_dir = project / "luac"
-    mc_build(lua_dir)
-    mc_build(luac_dir)
-    lua_exe = lua_dir / "bin" / f"lua{EXE}"
-    luac_exe = luac_dir / "bin" / f"luac{EXE}"
+    mc_build(project)
+    lua_exe = project / "bin" / f"lua{EXE}"
+    luac_exe = project / "bin" / f"luac{EXE}"
 
-    script = luac_dir / "_smoke.lua"
-    chunk = luac_dir / "_smoke.luac"
+    script = project / "_smoke.lua"
+    chunk = project / "_smoke.luac"
     script.write_text(
         'print("compiled by luac")\n'
         "local t = {1,2,3}\n"
@@ -77,12 +81,46 @@ def smoke_lua():
     print("lua/luac: OK")
 
 
+def smoke_tcc_bootstrap():
+    """Three-stage self-hosting bootstrap: `mc build` (mc's embedded tcc)
+    compiles tcc.c into tcc #1; tcc #1 then compiles the same tcc.c into
+    tcc #2; tcc #2 compiles it again into tcc #3. tcc #2 and #3 should be
+    byte-identical (upstream's classic self-hosting fixed point — tcc #1
+    still carries mc's own toolchain's object-file quirks, but the loop
+    converges after one self-compile)."""
+    project = CACHE_DIR / "tinycc-aebb1436"
+    env = os.environ.copy()
+    env["MC_RUNTIME_CACHE_DIR"] = str(TCC_RUNTIME_CACHE)
+    mc_build(project, env=env)
+    tcc1 = project / "bin" / f"tcc{EXE}"
+
+    def self_compile(compiler, out_name):
+        out = project / "bin" / out_name
+        subprocess.run(
+            [str(compiler), "-B", str(TCC_RUNTIME_CACHE), "-I", "config", "-o", str(out), "src/tcc.c"],
+            cwd=project,
+            check=True,
+        )
+        return out
+
+    tcc2 = self_compile(tcc1, f"tcc2{EXE}")
+    tcc3 = self_compile(tcc2, f"tcc3{EXE}")
+
+    for exe in (tcc1, tcc2, tcc3):
+        subprocess.run([str(exe), "-v"], check=True)
+
+    if tcc2.read_bytes() != tcc3.read_bytes():
+        sys.exit("tcc bootstrap failed: tcc #2 and tcc #3 are not byte-identical")
+    print("tcc bootstrap (mc -> tcc#1 -> tcc#2 -> tcc#3): OK")
+
+
 def main():
     if not MC.exists():
         sys.exit(f"mc build not found at {MC}; run `just build` first")
     fetch_mc_mods()
     smoke_sqlite()
     smoke_lua()
+    smoke_tcc_bootstrap()
     print("stress tests passed")
 
 
