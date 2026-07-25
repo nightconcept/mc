@@ -32,8 +32,10 @@ jobs:
             name: macos-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup mise
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
       - name: Cache LLVM tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -41,7 +43,7 @@ jobs:
           key: llvm-tools-${{ matrix.name }}-${{ hashFiles('scripts/fetch_tools.py') }}
           restore-keys: |
             llvm-tools-${{ matrix.name }}-
-      - name: Cache Zig package fetch and compiler cache
+      - name: Cache Zig cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -51,9 +53,12 @@ jobs:
           key: zig-cache-${{ runner.os }}-${{ hashFiles('build.zig.zon', 'src/cli/mc.zig') }}
           restore-keys: |
             zig-cache-${{ runner.os }}-
-      - run: just fetch-tools
-      - run: just ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Fetch tools
+        run: just fetch-tools
+      - name: Run CI
+        run: just ci
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mc-${{ matrix.artifact }}
           path: dist/mc-${{ matrix.artifact }}
@@ -64,8 +69,10 @@ jobs:
     name: windows-x64
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Setup mise
+        uses: jdx/mise-action@dad1bfd3df957f44999b559dd69dc1671cb4e9ea # v4.2.1
       - name: Cache LLVM tools
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -73,7 +80,7 @@ jobs:
           key: llvm-tools-windows-${{ hashFiles('scripts/fetch_tools.py') }}
           restore-keys: |
             llvm-tools-windows-
-      - name: Cache Zig package fetch and compiler cache
+      - name: Cache Zig cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
@@ -82,11 +89,14 @@ jobs:
           key: zig-cache-windows-${{ hashFiles('build.zig.zon', 'src/cli/mc.zig') }}
           restore-keys: |
             zig-cache-windows-
-      - shell: pwsh
+      - name: Fetch tools
+        shell: pwsh
         run: just fetch-tools
-      - shell: pwsh
+      - name: Run CI
+        shell: pwsh
         run: just ci
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Upload artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: mc-windows-x64
           path: dist/mc-windows-x64.exe
