@@ -350,13 +350,15 @@ fn buildOne(
             try tcc_argv.append(arena, "-L");
             try tcc_argv.append(arena, try arena.dupeZ(u8, resolved));
         }
-        // An ELF executable does not search its own directory for the shared
-        // libraries it links, so a vendored `.so` shipped next to the binary
-        // (e.g. in `bin/`) would fail to load at runtime. Add an `$ORIGIN`
-        // rpath so the loader looks beside the executable. (PE loads DLLs from
-        // the exe's directory automatically, so this is ELF-only.)
-        if (builtin.os.tag != .windows) {
+        // Executables do not search their own directory for shared libraries
+        // they link, so a vendored shared lib shipped next to the binary
+        // (e.g. in `bin/`) would fail to load at runtime. Add an rpath so
+        // the loader looks beside the executable ($ORIGIN for ELF/Linux,
+        // @executable_path for Mach-O/macOS; PE/Windows loads from exe dir).
+        if (builtin.os.tag == .linux) {
             try tcc_argv.append(arena, "-Wl,-rpath,$ORIGIN");
+        } else if (builtin.os.tag == .macos) {
+            try tcc_argv.append(arena, "-Wl,-rpath,@executable_path");
         }
     }
 

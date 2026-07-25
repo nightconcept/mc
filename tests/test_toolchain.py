@@ -108,7 +108,12 @@ def project_mode_lib_test(tmp):
     (-shared -rdynamic), then a project-mode consumer that links it two
     ways - explicit lib_dirs, and the implicit default `lib/` directory."""
     mc_bin = BUILD_DIR / f"mc{EXE}"
-    dll_suffix = ".dll" if IS_WINDOWS else ".so"
+    if IS_WINDOWS:
+        dll_suffix = ".dll"
+    elif sys.platform == "darwin":
+        dll_suffix = ".dylib"
+    else:
+        dll_suffix = ".so"
     dll_name = f"{'' if IS_WINDOWS else 'lib'}addlib{dll_suffix}"
 
     libproj = tmp / "libproj"
