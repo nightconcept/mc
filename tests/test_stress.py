@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from _env import ROOT, BUILD_DIR, EXE, run
 
 MC_MODS_URL = "https://github.com/nightconcept/mc-mods.git"
-MC_MODS_REF = "5156ca046bc47c8021b6b58bd3f49f7d8eee87f1"
+MC_MODS_REF = "302bfb8eb39c47a99ccaea640b6c7b345200d46d"
 CACHE_DIR = ROOT / "tests" / ".cache" / "mc-mods"
 MC = BUILD_DIR / f"mc{EXE}"
 
