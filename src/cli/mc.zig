@@ -342,8 +342,21 @@ fn buildOne(
     if (lib_dirs) |dirs| {
         for (dirs) |d| {
             const full = try joinRelative(arena, project_root, d);
+            // tcc does not normalize `..` in -L paths, so a consumer whose
+            // lib_dir climbs out of its own tree (e.g. "../lib") would produce
+            // an unresolved path and a "library not found" error. Resolve it to
+            // a clean absolute path first.
+            const resolved = try std.fs.path.resolve(arena, &.{full});
             try tcc_argv.append(arena, "-L");
-            try tcc_argv.append(arena, try arena.dupeZ(u8, full));
+            try tcc_argv.append(arena, try arena.dupeZ(u8, resolved));
+        }
+        // An ELF executable does not search its own directory for the shared
+        // libraries it links, so a vendored `.so` shipped next to the binary
+        // (e.g. in `bin/`) would fail to load at runtime. Add an `$ORIGIN`
+        // rpath so the loader looks beside the executable. (PE loads DLLs from
+        // the exe's directory automatically, so this is ELF-only.)
+        if (builtin.os.tag != .windows) {
+            try tcc_argv.append(arena, "-Wl,-rpath,$ORIGIN");
         }
     }
 
