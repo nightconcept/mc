@@ -64,6 +64,14 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Added `build.lib_dirs`/`build.libs` to project-mode `mc build` (`-L`/`-l`,
+  `lib_dirs` defaulting to `lib/` if present); vendored `mc-mods/doomgeneric-sdl`
+  (doomgeneric's SDL2 backend, sound dropped) as the first consumer and a
+  new `test_stress.py` smoke test. Found and fixed a real tcc-compat bug
+  along the way: doomgeneric's `doomtype.h` redefined `strncasecmp`/
+  `strcasecmp` as macros, which rewrote tcc's own win32 header's inline
+  definitions of those names into infinite self-recursion (stack overflow
+  on first call).
 - Added `tests/stress/run_stress.py` (`just test-stress`): builds/smoke-tests
   `mc-mods`' sqlite3 and lua/luac projects via project-mode `mc build`.
 - Pushed `mc-mods` (sqlite-3.53.3, lua-5.4.8) to `nightconcept/mc-mods`.

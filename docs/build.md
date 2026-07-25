@@ -31,6 +31,11 @@ and compiles a project without needing any tcc flags:
   `.exe` appended on Windows).
 - `build.include_dirs` / `build.defines` — `-I`/`-D` flags, same as the
   `[fmt]`/`[lint]` sections' use of `mc.toml`.
+- `build.lib_dirs` / `build.libs` — `-L`/`-l` flags, for linking a vendored
+  library (default `lib_dirs`: `lib/`, if that directory exists). On PE
+  (Windows), tcc's `-l<name>` resolves directly against `<name>.dll`/
+  `lib<name>.dll` (or a `.def`) in a `-L` dir — no import `.lib` needed;
+  elsewhere it resolves the usual `lib<name>.a`/`.so`.
 
 `mc init` scaffolds all of these (commented out) in a new `mc.toml`.
 

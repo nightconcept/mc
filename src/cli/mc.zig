@@ -325,7 +325,34 @@ fn buildOne(
         for (defs) |d| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-D{s}", .{d}, 0));
     }
 
+    // lib_dirs (-L) is order-independent in tcc, so it's fine alongside -I/-D.
+    // libs (-l) is emitted after sources below: tcc resolves undefined symbols
+    // against -l archives in argv order, so it must come after the files that
+    // reference them (GNU-ld convention). lib_dirs defaults to <root>/lib when
+    // present, so a project that vendors a library there needs only `libs`.
+    var lib_dirs = view.getArray("lib_dirs");
+    var default_lib_dirs: [1][]const u8 = undefined;
+    if (lib_dirs == null) {
+        const default_dir = try std.fs.path.join(arena, &.{ project_root, "lib" });
+        if (fmt_pkg.fileExists(io, default_dir)) {
+            default_lib_dirs[0] = "lib";
+            lib_dirs = default_lib_dirs[0..];
+        }
+    }
+    if (lib_dirs) |dirs| {
+        for (dirs) |d| {
+            const full = try joinRelative(arena, project_root, d);
+            try tcc_argv.append(arena, "-L");
+            try tcc_argv.append(arena, try arena.dupeZ(u8, full));
+        }
+    }
+
     for (sources.items) |s| try tcc_argv.append(arena, try arena.dupeZ(u8, s));
+
+    if (view.getArray("libs")) |libs| {
+        for (libs) |l| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-l{s}", .{l}, 0));
+    }
+
     try tcc_argv.append(arena, "-o");
     try tcc_argv.append(arena, try arena.dupeZ(u8, target_path));
 
@@ -490,6 +517,8 @@ fn initScaffold(
         \\# c_standard   = "c11"          # -std= flag
         \\# include_dirs = ["include"]    # -I flags
         \\# defines      = []             # -D flags: ["FOO=1"]
+        \\# lib_dirs     = ["lib"]        # -L flags (default: "lib" if it exists)
+        \\# libs         = []             # -l flags: ["SDL2"]
         \\# sources      = ["src/**/*.c"] # source files for `mc build` (default: src/**/*.c)
         \\# main         = "src/main.c"   # explicit main() file, for source trees with more than one
         \\# target       = "bin/myproject" # output binary path (default: bin/<name>)

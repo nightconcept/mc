@@ -96,8 +96,55 @@ def smoke_test():
             sys.exit("mc lint accepted invalid C")
 
         mc("tcc", "-h", capture_output=True, check=True)
+
+        project_mode_lib_test(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def project_mode_lib_test(tmp):
+    """`mc build` (project mode) linking a vendored shared library via
+    build.lib_dirs/build.libs: build a tiny DLL/.so with passthrough mode
+    (-shared -rdynamic), then a project-mode consumer that links it two
+    ways - explicit lib_dirs, and the implicit default `lib/` directory."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    dll_suffix = ".dll" if IS_WINDOWS else ".so"
+    dll_name = f"{'' if IS_WINDOWS else 'lib'}addlib{dll_suffix}"
+
+    libproj = tmp / "libproj"
+    (libproj / "lib").mkdir(parents=True)
+    addlib_c = libproj / "addlib.c"
+    addlib_c.write_text("int add(int a, int b) { return a + b; }\n")
+    dll_path = libproj / "lib" / dll_name
+    subprocess.run(
+        [str(mc_bin), "build", "-shared", "-rdynamic", str(addlib_c), "-o", str(dll_path)],
+        check=True,
+    )
+
+    preamble = "void printf (const char *, ...);\n" if IS_WINDOWS else "#include <stdio.h>\n"
+    main_c_src = f'{preamble}int add(int a, int b);\nint main(void){{printf("result: %d\\n", add(2, 3));return 0;}}\n'
+
+    def build_and_run(project_dir, mc_toml_build_section):
+        project_dir.mkdir(parents=True, exist_ok=True)
+        (project_dir / "src").mkdir()
+        (project_dir / "src" / "main.c").write_text(main_c_src)
+        (project_dir / "mc.toml").write_text(
+            f'[project]\nname = "{project_dir.name}"\n\n[build]\n{mc_toml_build_section}\n'
+        )
+        subprocess.run([str(mc_bin), "build"], cwd=project_dir, check=True)
+        bin_dir = project_dir / "bin"
+        shutil.copy(dll_path, bin_dir / dll_name)
+        exe = bin_dir / f"{project_dir.name}{EXE}"
+        out = subprocess.run([str(exe)], cwd=bin_dir, capture_output=True, text=True, check=True).stdout
+        assert out.strip() == "result: 5", f"lib link test failed: {out!r}"
+
+    build_and_run(tmp / "consumer_explicit", 'lib_dirs = ["../libproj/lib"]\nlibs = ["addlib"]')
+
+    # implicit default: no lib_dirs set, but ./lib exists under the project.
+    consumer_default = tmp / "consumer_default"
+    (consumer_default / "lib").mkdir(parents=True)
+    shutil.copy(dll_path, consumer_default / "lib" / dll_name)
+    build_and_run(consumer_default, 'libs = ["addlib"]')
 
 
 def test_toolchain(unit_only=False):

@@ -12,6 +12,8 @@ authors = []
 # c_standard   = "c11"          # -std= flag passed to clang tools
 # include_dirs = ["include"]    # Directories added as -I flags
 # defines      = []             # Preprocessor defines: ["FOO=1", "BAR"]
+# lib_dirs     = ["lib"]        # Directories added as -L flags (default: "lib" if it exists)
+# libs         = []             # Libraries added as -l flags: ["SDL2"]
 # sources      = ["src/**/*.c"] # Source files for `mc build` (default: src/**/*.c)
 # main         = "src/main.c"   # Explicit main() file, for source trees with more than one
 # target       = "bin/myproject" # Output binary path (default: bin/<name>)

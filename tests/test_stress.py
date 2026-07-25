@@ -2,17 +2,26 @@
 """Stress-test harness: fetches the pinned mc-mods projects and builds/smoke-tests
 each one with `mc build`, verifying the resulting binaries actually work."""
 import os
+import shutil
 import subprocess
 import sys
+import urllib.request
+import zipfile
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from _env import ROOT, BUILD_DIR, EXE, run
+from _env import ROOT, BUILD_DIR, EXE, IS_WINDOWS, run
 
 MC_MODS_URL = "https://github.com/nightconcept/mc-mods.git"
-MC_MODS_REF = "302bfb8eb39c47a99ccaea640b6c7b345200d46d"
+MC_MODS_REF = "8e81ee135e241211e55eef993a4d63d51c5b0126"
 CACHE_DIR = ROOT / "tests" / ".cache" / "mc-mods"
 MC = BUILD_DIR / f"mc{EXE}"
+
+# Freedoom's freedoom1.wad (BSD-ish license, no id Software content) as the
+# IWAD for the doomgeneric smoke test - avoids relying on id's shareware WAD.
+FREEDOOM_URL = "https://github.com/freedoom/freedoom/releases/download/v0.13.0/freedoom-0.13.0.zip"
+FREEDOOM_CACHE_DIR = ROOT / "tests" / ".cache" / "freedoom"
+FREEDOOM_WAD = FREEDOOM_CACHE_DIR / "freedoom1.wad"
 
 # Isolated from the user's real ~/.cache (or %LOCALAPPDATA%) mc runtime cache:
 # fixed and known ahead of time so smoke_tcc_bootstrap can pass the same -B
@@ -27,6 +36,23 @@ def fetch_mc_mods():
         run(["git", "clone", MC_MODS_URL, str(CACHE_DIR)])
     run(["git", "fetch", "origin"], cwd=CACHE_DIR)
     run(["git", "checkout", MC_MODS_REF], cwd=CACHE_DIR)
+
+
+def fetch_freedoom():
+    if FREEDOOM_WAD.exists():
+        return
+    FREEDOOM_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    zip_path = FREEDOOM_CACHE_DIR / "freedoom.zip"
+    urllib.request.urlretrieve(FREEDOOM_URL, zip_path)
+    with zipfile.ZipFile(zip_path) as z:
+        for name in z.namelist():
+            if name.endswith("freedoom1.wad"):
+                with z.open(name) as src, open(FREEDOOM_WAD, "wb") as dst:
+                    dst.write(src.read())
+                break
+        else:
+            sys.exit("freedoom1.wad not found in freedoom release zip")
+    zip_path.unlink()
 
 
 def mc_build(project_dir, env=None):
@@ -114,6 +140,41 @@ def smoke_tcc_bootstrap():
     print("tcc bootstrap (mc -> tcc#1 -> tcc#2 -> tcc#3): OK")
 
 
+def smoke_doomgeneric():
+    """doomgeneric's SDL2 backend (video/input only, sound dropped - see
+    mc-mods/doomgeneric-sdl/PATCHES.md). No -timedemo lump: freedoom ships
+    no demo lumps, so this instead runs the normal title-screen loop for a
+    few seconds under SDL's dummy video driver and checks it survives,
+    rather than crashing (e.g. the stack-overflow tcc/doomtype.h bug this
+    project's PATCHES.md documents). doomgeneric's stdio isn't reliably
+    flushed when piped, so a live process at the deadline (TimeoutExpired)
+    is the success signal, not captured stdout content."""
+    if not IS_WINDOWS:
+        print("doomgeneric: skipped (Windows-only vendored SDL2 for now)")
+        return
+
+    fetch_freedoom()
+    project = CACHE_DIR / "doomgeneric-sdl"
+    mc_build(project)
+
+    bin_dir = project / "bin"
+    exe = bin_dir / f"doomgeneric{EXE}"
+    shutil.copy(project / "lib" / "SDL2.dll", bin_dir / "SDL2.dll")
+    shutil.copy(FREEDOOM_WAD, bin_dir / "freedoom1.wad")
+
+    env = os.environ.copy()
+    env["SDL_VIDEODRIVER"] = "dummy"
+    try:
+        result = subprocess.run(
+            [str(exe), "-iwad", "freedoom1.wad"],
+            cwd=bin_dir, env=env, capture_output=True, text=True, timeout=6,
+        )
+        sys.exit(f"doomgeneric exited early (rc={result.returncode}):\n{result.stdout}\n{result.stderr}")
+    except subprocess.TimeoutExpired:
+        pass
+    print("doomgeneric (SDL2): OK")
+
+
 def main():
     if not MC.exists():
         sys.exit(f"mc build not found at {MC}; run `just build` first")
@@ -121,6 +182,7 @@ def main():
     smoke_sqlite()
     smoke_lua()
     smoke_tcc_bootstrap()
+    smoke_doomgeneric()
     print("stress tests passed")
 
 
