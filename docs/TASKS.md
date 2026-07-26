@@ -7,10 +7,11 @@ actually done; that same sentence is mirrored into `AGENTS.md`'s progress
 log as one line. Don't rewrite the sentence again later — it's a record of
 what happened, not a living description.
 
-Scope note: doomgeneric is out of scope for now (deferred, not planned).
-
 ## Done
 
+- [x] Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
+      SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
+      updated the pinned stress fixture, and smoke-tested dummy video/audio.
 - [x] Move test scripts into `tests/`: relocated `test_legacy.py`/
       `test_toolchain.py` from `scripts/` to `tests/`, updated `justfile`,
       `scripts/gate.py`, `scripts/dev.py`, and docs to match.
@@ -58,10 +59,3 @@ Scope note: doomgeneric is out of scope for now (deferred, not planned).
       `scripts/build.py` output) compiles tcc's own sources → stage1;
       stage1 compiles them again → stage2; compare stage1/stage2 build
       output for a fixed test input as a determinism sanity check.
-
-## Deferred / out of scope
-
-- doomgeneric stress case — skipped for now per explicit decision; revisit
-  if/when there's a concrete reason to add a 3rd, harder external project
-  (platform-variant-file selection is already exercised well enough by
-  Lua's `lua.c`/`luac.c` two-target case).

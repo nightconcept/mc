@@ -30,12 +30,12 @@
   (`tinycc-<commit>/`): `mc build` (mc's embedded tcc) produces tcc #1,
   tcc #1 compiles the same `tcc.c` into tcc #2, tcc #2 compiles it again
   into tcc #3 — tcc #2 and #3 must come out byte-identical. Also builds
-  `doomgeneric-sdl/` (doomgeneric's SDL2 backend, video/input only) via
-  `build.lib_dirs`/`build.libs`, and runs it headlessly (`SDL_VIDEODRIVER=
-  dummy`, a fetched `freedoom1.wad`) for a few seconds to check it doesn't
-  crash — Windows-only for now. Needs a prior `just build` and network
-  access; not part of `just test`/`gate` — run it explicitly when touching
-  project-mode `mc build`.
+  `doomgeneric-sdl/` (doomgeneric's SDL2 backend with SDL2_mixer sound) via
+  `build.lib_dirs`/`build.libs`, and runs it headlessly with SDL's dummy
+  video and audio drivers plus a fetched `freedoom1.wad` for a few seconds
+  to check it doesn't crash — Windows-only for now. Needs a prior `just
+  build` and network access; not part of `just test`/`gate` — run it
+  explicitly when touching project-mode `mc build`.
 
 ## Quality gates
 

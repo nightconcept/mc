@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 from _env import ROOT, BUILD_DIR, EXE, IS_WINDOWS, run
 
 MC_MODS_URL = "https://github.com/nightconcept/mc-mods.git"
-MC_MODS_REF = "8e81ee135e241211e55eef993a4d63d51c5b0126"
+MC_MODS_REF = "c89a388f413e499924bd14908b223289e32cdd74"
 CACHE_DIR = ROOT / "tests" / ".cache" / "mc-mods"
 MC = BUILD_DIR / f"mc{EXE}"
 
@@ -141,14 +141,13 @@ def smoke_tcc_bootstrap():
 
 
 def smoke_doomgeneric():
-    """doomgeneric's SDL2 backend (video/input only, sound dropped - see
-    mc-mods/doomgeneric-sdl/PATCHES.md). No -timedemo lump: freedoom ships
-    no demo lumps, so this instead runs the normal title-screen loop for a
-    few seconds under SDL's dummy video driver and checks it survives,
-    rather than crashing (e.g. the stack-overflow tcc/doomtype.h bug this
-    project's PATCHES.md documents). doomgeneric's stdio isn't reliably
-    flushed when piped, so a live process at the deadline (TimeoutExpired)
-    is the success signal, not captured stdout content."""
+    """doomgeneric's SDL2 backend with SDL2_mixer sound. No -timedemo lump:
+    freedoom ships no demo lumps, so this instead runs the normal title-screen
+    loop for a few seconds under SDL's dummy video and audio drivers and checks
+    it survives rather than crashing (e.g. the tcc compatibility bugs that the
+    project's PATCHES.md documents). doomgeneric's stdio isn't reliably flushed
+    when piped, so a live process at the deadline (TimeoutExpired) is the success
+    signal, not captured stdout content."""
     if not IS_WINDOWS:
         print("doomgeneric: skipped (Windows-only vendored SDL2 for now)")
         return
@@ -160,10 +159,12 @@ def smoke_doomgeneric():
     bin_dir = project / "bin"
     exe = bin_dir / f"doomgeneric{EXE}"
     shutil.copy(project / "lib" / "SDL2.dll", bin_dir / "SDL2.dll")
+    shutil.copy(project / "lib" / "SDL2_mixer.dll", bin_dir / "SDL2_mixer.dll")
     shutil.copy(FREEDOOM_WAD, bin_dir / "freedoom1.wad")
 
     env = os.environ.copy()
     env["SDL_VIDEODRIVER"] = "dummy"
+    env["SDL_AUDIODRIVER"] = "dummy"
     try:
         result = subprocess.run(
             [str(exe), "-iwad", "freedoom1.wad"],
@@ -172,7 +173,7 @@ def smoke_doomgeneric():
         sys.exit(f"doomgeneric exited early (rc={result.returncode}):\n{result.stdout}\n{result.stderr}")
     except subprocess.TimeoutExpired:
         pass
-    print("doomgeneric (SDL2): OK")
+    print("doomgeneric (SDL2 + SDL2_mixer): OK")
 
 
 def main():

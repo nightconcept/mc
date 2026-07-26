@@ -64,6 +64,9 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
+  SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
+  updated the pinned stress fixture, and smoke-tested dummy video/audio.
 - Added `build.lib_dirs`/`build.libs` to project-mode `mc build` (`-L`/`-l`,
   `lib_dirs` defaulting to `lib/` if present); vendored `mc-mods/doomgeneric-sdl`
   (doomgeneric's SDL2 backend, sound dropped) as the first consumer and a
@@ -77,8 +80,6 @@ entries to keep this file ≤100 lines; the detailed record lives in
 - Pushed `mc-mods` (sqlite-3.53.3, lua-5.4.8) to `nightconcept/mc-mods`.
 - Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
   projects; verified `mc build` + a `luac`/`lua` round-trip.
-- Vendored sqlite-3.53.3 in `mc-mods` with a tcc-compat `shell.c` patch;
-  verified `mc build` produces a working `sqlite3.exe`.
 - Added a multi-`main()` guard to project-mode `mc build`.
 - Implemented project-mode `mc build` (`mc.toml` [build] -> tcc).
 
