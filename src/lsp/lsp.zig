@@ -97,8 +97,25 @@ const BuildConfig = struct {
 
     fn deinit(self: *const BuildConfig, allocator: std.mem.Allocator) void {
         allocator.free(self.c_standard);
+        for (self.include_dirs) |d| allocator.free(d);
+        allocator.free(self.include_dirs);
+        for (self.defines) |d| allocator.free(d);
+        allocator.free(self.defines);
+        for (self.sources) |s| allocator.free(s);
+        allocator.free(self.sources);
+        for (self.clangd_args) |a| allocator.free(a);
+        allocator.free(self.clangd_args);
     }
 };
+
+fn dupeStringArray(allocator: std.mem.Allocator, arr: ?[]const []const u8) ![]const []const u8 {
+    const items = arr orelse return try allocator.alloc([]const u8, 0);
+    const out = try allocator.alloc([]const u8, items.len);
+    for (items, 0..) |item, i| {
+        out[i] = try allocator.dupe(u8, item);
+    }
+    return out;
+}
 
 fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allocator) !BuildConfig {
     const toml_path = try std.fs.path.join(allocator, &.{ project_root, "mc.toml" });
@@ -112,23 +129,37 @@ fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allo
             const build_sec = doc.section("build");
             const lsp_sec = doc.section("lsp");
 
+            const std_val = if (build_sec) |s| s.getString("c_standard") orelse "c11" else "c11";
+            const inc_val = if (build_sec) |s| s.getArray("include_dirs") else null;
+            const def_val = if (build_sec) |s| s.getArray("defines") else null;
+            const src_val = if (build_sec) |s| s.getArray("sources") else null;
+            const lsp_val = if (lsp_sec) |s| s.getArray("clangd_args") else null;
+
             return .{
-                .c_standard = try allocator.dupe(u8, if (build_sec) |s| s.getString("c_standard") orelse "c11" else "c11"),
-                .include_dirs = if (build_sec) |s| s.getArray("include_dirs") orelse &.{} else &.{},
-                .defines = if (build_sec) |s| s.getArray("defines") orelse &.{} else &.{},
-                .sources = if (build_sec) |s| s.getArray("sources") orelse &.{} else &.{},
-                .clangd_args = if (lsp_sec) |s| s.getArray("clangd_args") orelse &.{} else &.{},
+                .c_standard = try allocator.dupe(u8, std_val),
+                .include_dirs = try dupeStringArray(allocator, inc_val),
+                .defines = try dupeStringArray(allocator, def_val),
+                .sources = try dupeStringArray(allocator, src_val),
+                .clangd_args = try dupeStringArray(allocator, lsp_val),
             };
         } else |_| {}
     } else |_| {}
 
     return .{
         .c_standard = try allocator.dupe(u8, "c11"),
-        .include_dirs = &.{},
-        .defines = &.{},
-        .sources = &.{},
-        .clangd_args = &.{},
+        .include_dirs = try allocator.alloc([]const u8, 0),
+        .defines = try allocator.alloc([]const u8, 0),
+        .sources = try allocator.alloc([]const u8, 0),
+        .clangd_args = try allocator.alloc([]const u8, 0),
     };
+}
+
+fn normalizePath(path: []const u8, allocator: std.mem.Allocator) ![]const u8 {
+    const dup = try allocator.dupe(u8, path);
+    for (dup) |*c| {
+        if (c.* == '\\') c.* = '/';
+    }
+    return dup;
 }
 
 fn generateCompileCommands(
@@ -154,16 +185,20 @@ fn generateCompileCommands(
 
     var cmd_base: std.ArrayList(u8) = .empty;
     defer cmd_base.deinit(allocator);
-    var tmp_buf: [128]u8 = undefined;
-    const formatted_std = std.fmt.bufPrint(&tmp_buf, "clang -std={s}", .{cfg.c_standard}) catch "";
-    try cmd_base.appendSlice(allocator, formatted_std);
+
+    const std_flag = try std.fmt.allocPrint(allocator, "clang -std={s}", .{cfg.c_standard});
+    defer allocator.free(std_flag);
+    try cmd_base.appendSlice(allocator, std_flag);
+
     for (cfg.include_dirs) |dir| {
-        const formatted_inc = std.fmt.bufPrint(&tmp_buf, " -I{s}", .{dir}) catch "";
-        try cmd_base.appendSlice(allocator, formatted_inc);
+        const inc_flag = try std.fmt.allocPrint(allocator, " -I{s}", .{dir});
+        defer allocator.free(inc_flag);
+        try cmd_base.appendSlice(allocator, inc_flag);
     }
     for (cfg.defines) |def| {
-        const formatted_def = std.fmt.bufPrint(&tmp_buf, " -D{s}", .{def}) catch "";
-        try cmd_base.appendSlice(allocator, formatted_def);
+        const def_flag = try std.fmt.allocPrint(allocator, " -D{s}", .{def});
+        defer allocator.free(def_flag);
+        try cmd_base.appendSlice(allocator, def_flag);
     }
 
     const tmp_path = try std.fs.path.join(allocator, &.{ cache_dir, "compile_commands.json.tmp" });
@@ -174,13 +209,24 @@ fn generateCompileCommands(
     const file = try std.Io.Dir.cwd().createFile(io, tmp_path, .{});
     defer file.close(io);
 
-    var file_buf: [1024]u8 = undefined;
+    const norm_root = try normalizePath(project_root, allocator);
+    defer allocator.free(norm_root);
+
+    var file_buf: [4096]u8 = undefined;
     var w = file.writer(io, &file_buf);
     try w.interface.writeAll("[\n");
     for (sources.items, 0..) |src, idx| {
+        const norm_src = try normalizePath(src, allocator);
+        defer allocator.free(norm_src);
+
         try w.interface.writeAll("  {\n");
-        var buf: [512]u8 = undefined;
-        const formatted = std.fmt.bufPrint(&buf, "    \"directory\": \"{s}\",\n    \"file\": \"{s}\",\n    \"command\": \"{s} -c {s}\"\n", .{ project_root, src, cmd_base.items, src }) catch "";
+        const formatted = try std.fmt.allocPrint(allocator,
+            \\    "directory": "{s}",
+            \\    "file": "{s}",
+            \\    "command": "{s} -c {s}"
+            \\
+        , .{ norm_root, norm_src, cmd_base.items, norm_src });
+        defer allocator.free(formatted);
         try w.interface.writeAll(formatted);
         if (idx + 1 < sources.items.len) {
             try w.interface.writeAll("  },\n");

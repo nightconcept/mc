@@ -64,6 +64,7 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Verified `mc fmt`, `mc lint`, and `mc lsp` end-to-end in `test_toolchain.py`; fixed `mc lsp` memory lifetime bug and `mc lint` diagnostic snippet rendering.
 - Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
   SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
   updated the pinned stress fixture, and smoke-tested dummy video/audio.
@@ -81,7 +82,6 @@ entries to keep this file ≤100 lines; the detailed record lives in
 - Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
   projects; verified `mc build` + a `luac`/`lua` round-trip.
 - Added a multi-`main()` guard to project-mode `mc build`.
-- Implemented project-mode `mc build` (`mc.toml` [build] -> tcc).
 
 ## Engineering Standards
 

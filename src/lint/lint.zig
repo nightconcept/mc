@@ -154,6 +154,17 @@ fn runOnFile(
     return exit_code;
 }
 
+fn getRelativePath(project_root: []const u8, file_path: []const u8) []const u8 {
+    if (std.mem.startsWith(u8, file_path, project_root)) {
+        var rest = file_path[project_root.len..];
+        if (rest.len > 0 and (rest[0] == '/' or rest[0] == '\\')) {
+            rest = rest[1..];
+        }
+        return rest;
+    }
+    return file_path;
+}
+
 fn reformatDiagnostics(
     writer: anytype,
     input: []const u8,
@@ -166,10 +177,7 @@ fn reformatDiagnostics(
         if (parseDiagnosticLine(line, alloc)) |*d| {
             defer d.deinit(alloc);
 
-            const rel = if (std.mem.startsWith(u8, d.file, project_root))
-                d.file[project_root.len + 1 ..]
-            else
-                d.file;
+            const rel = getRelativePath(project_root, d.file);
 
             if (use_color) {
                 const color = levelColor(d.level);
@@ -187,12 +195,16 @@ fn reformatDiagnostics(
             try writer.print("  --> {s}:{s}:{s}\n", .{ rel, d.line_num, d.col_num });
 
             if (lines.next()) |src_line| {
-                if (lines.next()) |caret_line| {
-                    const ln_trimmed = std.mem.trimStart(u8, src_line, " ");
+                if (std.mem.indexOfScalar(u8, src_line, '|')) |pipe_idx| {
+                    const code = src_line[pipe_idx + 1 ..];
                     try writer.writeAll("   |\n");
-                    try writer.print("{s:>4} | {s}\n", .{ d.line_num, ln_trimmed });
-                    const caret_trimmed = std.mem.trimStart(u8, caret_line, " ");
-                    try writer.print("   | {s}\n\n", .{caret_trimmed});
+                    try writer.print("{s:>4} |{s}\n", .{ d.line_num, code });
+                    if (lines.next()) |caret_line| {
+                        if (std.mem.indexOfScalar(u8, caret_line, '|')) |c_pipe| {
+                            const caret_code = caret_line[c_pipe + 1 ..];
+                            try writer.print("     |{s}\n\n", .{caret_code});
+                        }
+                    }
                 }
             }
         }

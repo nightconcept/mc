@@ -9,6 +9,7 @@ what happened, not a living description.
 
 ## Done
 
+- [x] Verified `mc fmt`, `mc lint`, and `mc lsp` subcommands end-to-end in `tests/test_toolchain.py`: fixed a memory lifetime bug in `mc lsp` string array parsing, improved `mc lint` diagnostic line rendering and relative path formatting, and added comprehensive smoke tests covering style overrides, clang-tidy diagnostics, and JSON-RPC LSP compile database generation.
 - [x] Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
       SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
       updated the pinned stress fixture, and smoke-tested dummy video/audio.

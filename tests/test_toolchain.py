@@ -97,9 +97,121 @@ def smoke_test():
 
         mc("tcc", "-h", capture_output=True, check=True)
 
+        fmt_test(tmp)
+        lint_test(tmp)
+        lsp_test(tmp)
         project_mode_lib_test(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def fmt_test(tmp):
+    """Test `mc fmt` formatting and `mc.toml` [fmt] configuration."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    fmt_dir = tmp / "fmt_test"
+    fmt_dir.mkdir(parents=True, exist_ok=True)
+
+    unformatted_c = fmt_dir / "unformatted.c"
+    unformatted_c.write_text("int main(void){int x=1;return x;}\n")
+
+    # Format in-place
+    subprocess.run([str(mc_bin), "fmt", str(unformatted_c)], cwd=fmt_dir, check=True)
+    assert "int x = 1;" in unformatted_c.read_text(), "mc fmt failed to format file"
+
+    # --check on formatted file should succeed
+    res = subprocess.run([str(mc_bin), "fmt", "--check", str(unformatted_c)], cwd=fmt_dir, capture_output=True)
+    assert res.returncode == 0, f"mc fmt --check failed on formatted file: {res.stderr.decode('utf-8', errors='replace')}"
+
+    # Test mc.toml [fmt] section style overrides
+    (fmt_dir / "mc.toml").write_text('[project]\nname = "fmt_test"\n\n[fmt]\nIndentWidth = 2\n')
+    unformatted_c.write_text("int main(void) {\nint x = 1;\nreturn x;\n}\n")
+    subprocess.run([str(mc_bin), "fmt", str(unformatted_c)], cwd=fmt_dir, check=True)
+    assert "  int x = 1;" in unformatted_c.read_text(), "mc fmt with mc.toml [fmt] IndentWidth=2 failed"
+
+
+def lint_test(tmp):
+    """Test `mc lint` syntax gate, full clang-tidy pass, diagnostic formatting, and `mc.toml` [lint]."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    lint_dir = tmp / "lint_test"
+    lint_dir.mkdir(parents=True, exist_ok=True)
+
+    clean_c = lint_dir / "clean.c"
+    clean_c.write_text("int main(void) { return 0; }\n")
+
+    invalid_c = lint_dir / "invalid.c"
+    invalid_c.write_text("int main(void) { return 0 }\n")
+
+    bad_lint_c = lint_dir / "bad_lint.c"
+    bad_lint_c.write_text("int main(void) { char a[5]; a[10] = 0; return 0; }\n")
+
+    # --syntax-only checks
+    subprocess.run([str(mc_bin), "lint", "--syntax-only", str(clean_c)], cwd=lint_dir, check=True)
+    res = subprocess.run([str(mc_bin), "lint", "--syntax-only", str(invalid_c)], cwd=lint_dir, capture_output=True)
+    assert res.returncode != 0, "mc lint --syntax-only accepted invalid C syntax"
+
+    # Full clang-tidy pass on clean file
+    subprocess.run([str(mc_bin), "lint", str(clean_c)], cwd=lint_dir, check=True)
+
+    # Full clang-tidy pass on file with lint issues & verify diagnostic formatting
+    res = subprocess.run([str(mc_bin), "lint", str(bad_lint_c)], cwd=lint_dir, capture_output=True, text=True)
+    stderr = res.stderr
+    assert "warning[readability-magic-numbers]" in stderr or "warning[clang-analyzer-security.ArrayBound]" in stderr, (
+        f"mc lint output missing expected clang-tidy warnings: {stderr!r}"
+    )
+    assert "-->" in stderr, f"mc lint output missing diagnostic line pointer: {stderr!r}"
+    assert "|" in stderr, f"mc lint output missing snippet line formatting: {stderr!r}"
+
+    # Test mc.toml [lint] configuration
+    (lint_dir / "mc.toml").write_text('[project]\nname = "lint_test"\n\n[lint]\nchecks = "readability-magic-numbers"\n')
+    res = subprocess.run([str(mc_bin), "lint", str(bad_lint_c)], cwd=lint_dir, capture_output=True, text=True)
+    assert "readability-magic-numbers" in res.stderr, f"mc lint with mc.toml [lint] checks failed: {res.stderr!r}"
+
+
+def lsp_test(tmp):
+    """Test `mc lsp` compile_commands.json generation and clangd bridge startup."""
+    import json
+    import time
+
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    lsp_dir = tmp / "lsp_test"
+    lsp_dir.mkdir(parents=True, exist_ok=True)
+
+    (lsp_dir / "include").mkdir()
+    (lsp_dir / "include" / "hdr.h").write_text("#define VAL 42\n")
+    (lsp_dir / "src").mkdir()
+    (lsp_dir / "src" / "main.c").write_text('#include "hdr.h"\nint main(void) { return VAL; }\n')
+
+    (lsp_dir / "mc.toml").write_text(
+        '[project]\nname = "lsptest"\n\n[build]\nc_standard = "c11"\ninclude_dirs = ["include"]\ndefines = ["APP_VER=1"]\n'
+    )
+
+    proc = subprocess.Popen(
+        [str(mc_bin), "lsp"],
+        cwd=lsp_dir,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    try:
+        cc_json = lsp_dir / ".mccache" / "compile_commands.json"
+        for _ in range(20):
+            if cc_json.exists():
+                break
+            time.sleep(0.1)
+
+        assert cc_json.exists(), "mc lsp failed to generate .mccache/compile_commands.json"
+        data = json.loads(cc_json.read_text())
+        assert len(data) > 0, "compile_commands.json is empty"
+        cmd = data[0].get("command", "")
+        assert "-std=c11" in cmd, f"-std=c11 missing in compile_commands.json: {cmd!r}"
+        assert "-Iinclude" in cmd, f"-Iinclude missing in compile_commands.json: {cmd!r}"
+        assert "-DAPP_VER=1" in cmd, f"-DAPP_VER=1 missing in compile_commands.json: {cmd!r}"
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            proc.kill()
 
 
 def project_mode_lib_test(tmp):
@@ -163,3 +275,4 @@ if __name__ == "__main__":
     parser.add_argument("--unit-only", action="store_true", help="Run Zig unit tests only")
     args = parser.parse_args()
     test_toolchain(unit_only=args.unit_only)
+
