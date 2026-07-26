@@ -104,7 +104,7 @@ jobs:
           retention-days: 7
 
   release:
-    name: Publish latest pre-release
+    name: Publish edge pre-release
     needs: [unix, windows]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
@@ -123,18 +123,17 @@ jobs:
         run: |
           cd dist
           chmod +x mc-linux-x64 mc-macos-arm64
-          for f in mc-*; do
-            zip "${f%.exe}.zip" "$f"
-            rm "$f"
-          done
+          mv mc-linux-x64 mc && zip mc-linux-x64.zip mc && rm mc
+          mv mc-macos-arm64 mc && zip mc-macos-arm64.zip mc && rm mc
+          mv mc-windows-x64.exe mc.exe && zip mc-windows-x64.zip mc.exe && rm mc.exe
           ls -la
-      - name: Replace latest pre-release
+      - name: Replace edge pre-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
-          gh release create latest dist/*.zip \
-            --title "mc latest (${GITHUB_SHA::7})" \
+          gh release delete edge --yes --cleanup-tag || true
+          gh release create edge dist/*.zip \
+            --title "mc edge (${GITHUB_SHA::7})" \
             --notes "Automated pre-release built from ${GITHUB_SHA}." \
             --prerelease \
             --target "$GITHUB_SHA"
