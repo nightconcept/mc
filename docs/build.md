@@ -37,7 +37,7 @@ and compiles a project without needing any tcc flags:
   `lib<name>.dll` (or a `.def`) in a `-L` dir — no import `.lib` needed;
   elsewhere it resolves the usual `lib<name>.a`/`.so`.
 
-`mc init` scaffolds all of these (commented out) in a new `mc.toml`.
+`mc init` scaffolds `src/main.c` and a clean `mc.toml`.
 
 ### Passthrough mode (`mc build <args>`)
 

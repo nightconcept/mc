@@ -9,7 +9,7 @@ license = "MIT"
 authors = []
 
 [build]
-# c_standard   = "c11"          # -std= flag passed to clang tools
+# c_standard   = "c99"          # -std= flag passed to clang tools
 # include_dirs = ["include"]    # Directories added as -I flags
 # defines      = []             # Preprocessor defines: ["FOO=1", "BAR"]
 # lib_dirs     = ["lib"]        # Directories added as -L flags (default: "lib" if it exists)

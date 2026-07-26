@@ -101,8 +101,37 @@ def smoke_test():
         lint_test(tmp)
         lsp_test(tmp)
         project_mode_lib_test(tmp)
+        init_test(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
+
+
+def init_test(tmp):
+    """Test `mc init` scaffolding and project mode build execution."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    init_dir = tmp / "init_test"
+    init_dir.mkdir(parents=True, exist_ok=True)
+
+    res = subprocess.run([str(mc_bin), "init"], cwd=init_dir, capture_output=True, text=True)
+    assert res.returncode == 0, f"mc init failed: {res.stderr}"
+    assert (init_dir / "mc.toml").exists(), "mc init did not create mc.toml"
+    assert (init_dir / "src" / "main.c").exists(), "mc init did not create src/main.c"
+    assert "name    = \"myproject\"" in (init_dir / "mc.toml").read_text()
+    assert "Hello World" in (init_dir / "src" / "main.c").read_text()
+
+    res = subprocess.run([str(mc_bin), "build"], cwd=init_dir, capture_output=True, text=True)
+    assert res.returncode == 0, f"mc build failed on initialized project: {res.stderr}"
+
+    bin_path = init_dir / "bin" / f"myproject{EXE}"
+    assert bin_path.exists(), f"mc build did not create expected binary at {bin_path}"
+
+    res = subprocess.run([str(bin_path)], capture_output=True, text=True)
+    assert res.returncode == 0
+    assert "Hello World" in res.stdout, f"built binary output unexpected: {res.stdout}"
+
+    res = subprocess.run([str(mc_bin), "init"], cwd=init_dir, capture_output=True, text=True)
+    assert res.returncode == 1, "mc init succeeded when mc.toml already exists"
+    assert "already exists" in res.stderr
 
 
 def fmt_test(tmp):

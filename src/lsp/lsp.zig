@@ -129,7 +129,7 @@ fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allo
             const build_sec = doc.section("build");
             const lsp_sec = doc.section("lsp");
 
-            const std_val = if (build_sec) |s| s.getString("c_standard") orelse "c11" else "c11";
+            const std_val = if (build_sec) |s| s.getString("c_standard") orelse "c99" else "c99";
             const inc_val = if (build_sec) |s| s.getArray("include_dirs") else null;
             const def_val = if (build_sec) |s| s.getArray("defines") else null;
             const src_val = if (build_sec) |s| s.getArray("sources") else null;
@@ -146,7 +146,7 @@ fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allo
     } else |_| {}
 
     return .{
-        .c_standard = try allocator.dupe(u8, "c11"),
+        .c_standard = try allocator.dupe(u8, "c99"),
         .include_dirs = try allocator.alloc([]const u8, 0),
         .defines = try allocator.alloc([]const u8, 0),
         .sources = try allocator.alloc([]const u8, 0),

@@ -64,23 +64,16 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Updated `mc init` to scaffold `src/main.c` (Hello World) and a clean `mc.toml`, changed default LSP `c_standard` to `c99`, and added `mc init` test coverage in `test_toolchain.py`.
 - Verified `mc fmt`, `mc lint`, and `mc lsp` end-to-end in `test_toolchain.py`; fixed `mc lsp` memory lifetime bug and `mc lint` diagnostic snippet rendering.
 - Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
   SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
   updated the pinned stress fixture, and smoke-tested dummy video/audio.
 - Added `build.lib_dirs`/`build.libs` to project-mode `mc build` (`-L`/`-l`,
   `lib_dirs` defaulting to `lib/` if present); vendored `mc-mods/doomgeneric-sdl`
-  (doomgeneric's SDL2 backend, sound dropped) as the first consumer and a
-  new `test_stress.py` smoke test. Found and fixed a real tcc-compat bug
-  along the way: doomgeneric's `doomtype.h` redefined `strncasecmp`/
-  `strcasecmp` as macros, which rewrote tcc's own win32 header's inline
-  definitions of those names into infinite self-recursion (stack overflow
-  on first call).
+  as the first consumer.
 - Added `tests/stress/run_stress.py` (`just test-stress`): builds/smoke-tests
   `mc-mods`' sqlite3 and lua/luac projects via project-mode `mc build`.
-- Pushed `mc-mods` (sqlite-3.53.3, lua-5.4.8) to `nightconcept/mc-mods`.
-- Vendored Lua 5.4.8 in `mc-mods` as sibling `lua/`/`luac/` mc.toml
-  projects; verified `mc build` + a `luac`/`lua` round-trip.
 - Added a multi-`main()` guard to project-mode `mc build`.
 
 ## Engineering Standards
