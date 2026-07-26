@@ -102,3 +102,31 @@ jobs:
           path: dist/mc-windows-x64.exe
           if-no-files-found: error
           retention-days: 7
+
+  release:
+    name: Publish latest pre-release
+    needs: [unix, windows]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Download artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: mc-*
+          path: dist
+          merge-multiple: true
+      - name: Replace latest pre-release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la dist
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/* \
+            --title "mc latest (${GITHUB_SHA::7})" \
+            --notes "Automated pre-release built from ${GITHUB_SHA}." \
+            --prerelease \
+            --target "$GITHUB_SHA"
