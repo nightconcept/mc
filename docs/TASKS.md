@@ -9,6 +9,9 @@ what happened, not a living description.
 
 ## Done
 
+- [x] Adopted a PR-gated `main` workflow: added a no-bypass GitHub ruleset
+      requiring Linux/macOS/Windows CI, moved `edge` publishing to `main`,
+      removed `scripts/dev.py`, and deleted the retired `dev` branch.
 - [x] Added URL-sourced C packages: package/application manifests, full Git URL
       dependencies, shared immutable checkout caching, committed `mc.lock`,
       `mc add`/`mc update`/`mc build --locked`, source/header graph integration,

@@ -1,6 +1,6 @@
 # Execution Plan: PR-first Main Workflow
 
-Status: active
+Status: complete
 Last reviewed: 2026-08-01
 Owner: nightconcept
 
@@ -93,7 +93,7 @@ gh run list --branch main --workflow CI --limit 1
 gh release view edge
 ```
 
-**Status:** [ ] in progress
+**Status:** [x] complete
 
 ---
 
@@ -130,7 +130,7 @@ git ls-remote --symref origin HEAD
 git ls-remote --heads origin main dev
 ```
 
-**Status:** [ ] in progress
+**Status:** [x] complete
 
 ## Testing Strategy
 
@@ -165,5 +165,7 @@ itself should be a PR to `main`; once merged, `dev` can be deleted.
 
 - 2026-08-01: Phase 1 complete. Created `main`, made it the default, and
   activated the no-bypass `PR-gated main` ruleset with the three CI checks.
-- 2026-08-01: Phases 2 and 3 in progress in PR #2; CI, workflow guidance, and
-  removal of `scripts/dev.py` await the required PR checks and merge.
+- 2026-08-01: Phase 2 complete. PR #2 passed the three required checks and
+  merged; the post-merge `main` workflow published `edge` from `7dc1631`.
+- 2026-08-01: Phase 3 complete. Deleted the retired remote and local `dev`
+  branches; `origin/HEAD` now points to `main`.

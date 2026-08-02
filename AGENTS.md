@@ -66,6 +66,8 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Adopted a PR-gated `main` workflow with no bypass, required platform CI,
+  `edge` releases from `main`, and no `dev` branch or compatibility shim.
 - Added URL-sourced C packages: package/application manifests, full Git URL dependencies, shared immutable checkout caching, committed `mc.lock`, `mc add`/`mc update`/`mc build --locked`, source/header graph integration, and local-Git end-to-end coverage.
 
 - Updated `mc init` to scaffold `src/main.c` (Hello World) and a clean `mc.toml`, changed default LSP `c_standard` to `c99`, and added `mc init` test coverage in `test_toolchain.py`.
