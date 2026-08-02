@@ -4,7 +4,7 @@ Status: active
 Last reviewed: 2026-08-01
 Owner: nightconcept
 
-## Current state
+## Baseline before migration
 
 - The GitHub default branch, remote `HEAD`, and local checkout are `dev`.
 - The remote has no `main` branch. It has no rulesets, and `dev` has no branch
@@ -42,3 +42,12 @@ generic uses such as "development build" should be retained where they do not
 refer to the retired branch. The unused compatibility shim
 `scripts/dev.py` requires an explicit remove-or-rename decision during the
 migration.
+
+## Migration state
+
+On 2026-08-01, `main` was created from the prior integration tip and became
+the GitHub default branch. The active `PR-gated main` ruleset requires pull
+requests, current `linux-x64`, `macos-arm64`, and `windows-x64` checks, and has
+no bypass actors. The migration pull request changes CI to target `main` only;
+the former branch remains only until that pull request has merged and its
+post-merge release has succeeded.

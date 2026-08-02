@@ -62,7 +62,7 @@ gh workflow run CI --ref main
 gh run list --branch main --workflow CI --limit 1
 ```
 
-**Status:** [ ] not started
+**Status:** [x] complete
 
 ---
 
@@ -93,7 +93,7 @@ gh run list --branch main --workflow CI --limit 1
 gh release view edge
 ```
 
-**Status:** [ ] not started
+**Status:** [ ] in progress
 
 ---
 
@@ -130,7 +130,7 @@ git ls-remote --symref origin HEAD
 git ls-remote --heads origin main dev
 ```
 
-**Status:** [ ] not started
+**Status:** [ ] in progress
 
 ## Testing Strategy
 
@@ -163,5 +163,7 @@ itself should be a PR to `main`; once merged, `dev` can be deleted.
 
 ## Progress Log
 
-- 2026-08-01: Plan created from current GitHub and repository workflow
-  research; no implementation started.
+- 2026-08-01: Phase 1 complete. Created `main`, made it the default, and
+  activated the no-bypass `PR-gated main` ruleset with the three CI checks.
+- 2026-08-01: Phases 2 and 3 in progress in PR #2; CI, workflow guidance, and
+  removal of `scripts/dev.py` await the required PR checks and merge.
