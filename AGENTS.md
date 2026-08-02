@@ -35,6 +35,8 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - [Lint](docs/lint.md) — `mc lint` checks and usage
 - [Testing](docs/testing.md) — legacy/toolchain suites, quality gates
 - [Conventions](docs/conventions.md) — commit style, code style, tool pins
+- [PR Workflow](docs/conventions.md#branch-workflow) — topic branches, PR-only
+  integration, and required CI checks on `main`
 - [Tasks](docs/TASKS.md) — ongoing task tracker; check items off and log a
   one-line summary here when done (see below)
 
@@ -87,6 +89,8 @@ entries to keep this file ≤100 lines; the detailed record lives in
 - Keep TinyCC updates (via `just update-tinycc`) as their own commit,
   separate from `mc`-side changes.
 - Commits **must** follow [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`).
+- Start all work from `main` on a topic branch and merge it through a passing
+  pull request; never push directly to `main`.
 - Run the smallest relevant test before committing; use `just test-legacy` for
   compiler changes and `just test-toolchain` for `mc` CLI changes. Legacy
   tests always gate before toolchain tests — `just test` enforces that order.

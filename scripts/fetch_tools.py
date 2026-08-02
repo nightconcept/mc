@@ -2,7 +2,7 @@
 """LLVM binary fetcher script for mc (ModC).
 
 Downloads clang-format, clang-tidy, and clangd binaries from LLVM
-GitHub releases into .tools/ (gitignored, used by CI cache and local dev).
+GitHub releases into .tools/ (gitignored, used by CI cache and local work).
 """
 
 import argparse

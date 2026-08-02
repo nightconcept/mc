@@ -37,7 +37,7 @@ mc tcc [args...]              # pass args straight through to tcc driver
 
 ## Development
 
-All dev tasks go through `just` (see `justfile`):
+All repository tasks go through `just` (see `justfile`):
 
 ```sh
 just build           # out-of-tree build into build/
@@ -58,4 +58,3 @@ just update-tinycc
 ## License
 
 The mc project is dual-licensed under [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
-
