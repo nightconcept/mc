@@ -20,7 +20,7 @@ what happened, not a living description.
       updated the pinned stress fixture, and smoke-tested dummy video/audio.
 - [x] Move test scripts into `tests/`: relocated `test_legacy.py`/
       `test_toolchain.py` from `scripts/` to `tests/`, updated `justfile`,
-      `scripts/gate.py`, and docs to match.
+      `scripts/gate.py`, `scripts/dev.py`, and docs to match.
 - [x] Project-mode `mc build`: `mc build` with no args now reads `mc.toml`
       (`[project]`/`[build]`: `sources`, `main`, `target`, `include_dirs`,
       `defines`), resolves sources (default `src/**/*.c`), and compiles to
