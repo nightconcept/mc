@@ -48,6 +48,5 @@ migration.
 On 2026-08-01, `main` was created from the prior integration tip and became
 the GitHub default branch. The active `PR-gated main` ruleset requires pull
 requests, current `linux-x64`, `macos-arm64`, and `windows-x64` checks, and has
-no bypass actors. The migration pull request changes CI to target `main` only;
-the former branch remains only until that pull request has merged and its
-post-merge release has succeeded.
+no bypass actors. CI now targets `main` only, `edge` is published from a
+successful `main` push, and the retired `dev` branch no longer exists.
