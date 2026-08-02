@@ -1,6 +1,7 @@
 //! URL-sourced package manifests, locks, Git cache, and source graphs.
 
 const std = @import("std");
+const builtin = @import("builtin");
 const toml = @import("toml");
 
 pub const ProjectKind = enum { application, package };
@@ -242,7 +243,7 @@ fn ensureCheckout(io: std.Io, allocator: std.mem.Allocator, cache_root: []const 
         return error.LockIntegrityMismatch;
     } else |_| {}
     try std.Io.Dir.createDirPath(.cwd(), io, cache_root);
-    const temp = try std.fmt.allocPrint(allocator, "{s}.tmp-{d}", .{ final, std.c.getpid() });
+    const temp = try std.fmt.allocPrint(allocator, "{s}.tmp-{d}", .{ final, processId() });
     std.Io.Dir.cwd().deleteTree(io, temp) catch {};
     try gitStatus(io, allocator, &.{ "clone", "--no-checkout", urlBase(url), temp });
     try gitStatus(io, allocator, &.{ "-C", temp, "checkout", "--detach", revision });
@@ -254,6 +255,13 @@ fn ensureCheckout(io: std.Io, allocator: std.mem.Allocator, cache_root: []const 
         std.Io.Dir.cwd().deleteTree(io, temp) catch {};
     };
     return final;
+}
+
+fn processId() u32 {
+    return if (builtin.os.tag == .windows)
+        std.os.windows.GetCurrentProcessId()
+    else
+        @intCast(std.c.getpid());
 }
 
 fn archiveHash(io: std.Io, allocator: std.mem.Allocator, checkout: []const u8, revision: []const u8) ![]const u8 {
