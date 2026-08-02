@@ -64,6 +64,8 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Added URL-sourced C packages: package/application manifests, full Git URL dependencies, shared immutable checkout caching, committed `mc.lock`, `mc add`/`mc update`/`mc build --locked`, source/header graph integration, and local-Git end-to-end coverage.
+
 - Updated `mc init` to scaffold `src/main.c` (Hello World) and a clean `mc.toml`, changed default LSP `c_standard` to `c99`, and added `mc init` test coverage in `test_toolchain.py`.
 - Verified `mc fmt`, `mc lint`, and `mc lsp` end-to-end in `test_toolchain.py`; fixed `mc lsp` memory lifetime bug and `mc lint` diagnostic snippet rendering.
 - Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with

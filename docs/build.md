@@ -11,6 +11,7 @@ Two modes, chosen by whether any args follow `build`:
 
 ```sh
 mc build                       # project mode: reads mc.toml, no args
+mc build --locked              # project mode; require the checked-in lock
 mc build [args]                 # passthrough mode: raw tcc args
 ```
 
@@ -38,6 +39,44 @@ and compiles a project without needing any tcc flags:
   elsewhere it resolves the usual `lib<name>.a`/`.so`.
 
 `mc init` scaffolds `src/main.c` and a clean `mc.toml`.
+
+## Applications and packages
+
+Existing manifests are applications: `project.kind` defaults to
+`"application"`. An application supplies the one `main()` and may declare
+full Git URLs at the TOML root:
+
+```toml
+dependencies = ["https://github.com/acme/mc-json"]
+
+[project]
+name = "notes"
+```
+
+Run `mc add <git-url>` to validate and lock a dependency, or `mc update`
+to refresh it. An optional `#tag` or `#commit` fragment is resolved by Git.
+`mc.lock` is generated, must be committed, and pins an exact commit plus a
+SHA-256 archive hash. Builds consume only this lock; they do not advance a
+remote branch. `mc build` reports a missing or stale lock, and
+`mc build --locked` is the CI spelling of the same reproducible contract.
+
+A reusable package is initialized with:
+
+```sh
+mc init --package https://github.com/acme/mc-json
+```
+
+It writes `kind = "package"`, creates `src/` and
+`include/mc-json/`, and does not create `src/main.c`. Packages cannot be
+built alone and cannot define `main()`. Their configured C sources compile
+with the consuming application. `include/` is the package's exported C
+header root, not a `node_modules` directory: if the package contains
+`include/mc-json/json.h`, consumers write `#include <mc-json/json.h>`.
+
+GitHub and Forgejo need no special configuration: both are ordinary Git URL
+hosts. Checkouts live in a disposable shared platform cache under
+`mc/packages/` (or `MC_PACKAGE_CACHE_DIR` for an explicit override), never
+in a project-local vendor directory.
 
 ### Passthrough mode (`mc build <args>`)
 

@@ -16,15 +16,22 @@ def zig_unit_tests():
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "test",
-        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml",
+        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml", "--dep", "packages",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
+        "--dep", "toml", "--dep", "fmt", "--dep", "packages", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
         "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
         f"-Mtoml_ext={toml_pkg}",
+        "--dep", "toml", f"-Mpackages={ROOT / 'src' / 'packages' / 'packages.zig'}",
         f"-Mruntime={BUILD_DIR / 'runtime_embed.zig'}",
         "-lc",
+    ])
+    run([
+        ZIG, "test",
+        "--dep", "toml", f"-Mroot={ROOT / 'src' / 'packages' / 'packages.zig'}",
+        "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
+        f"-Mtoml_ext={toml_pkg}",
     ])
 
 
@@ -102,6 +109,9 @@ def smoke_test():
         lsp_test(tmp)
         project_mode_lib_test(tmp)
         init_test(tmp)
+        package_kind_test(tmp)
+        package_init_test(tmp)
+        package_dependency_test(tmp)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -132,6 +142,69 @@ def init_test(tmp):
     res = subprocess.run([str(mc_bin), "init"], cwd=init_dir, capture_output=True, text=True)
     assert res.returncode == 1, "mc init succeeded when mc.toml already exists"
     assert "already exists" in res.stderr
+
+
+def package_kind_test(tmp):
+    """A package is not an executable project and cannot be built directly."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    package_dir = tmp / "package_kind"
+    (package_dir / "src").mkdir(parents=True)
+    (package_dir / "src" / "library.c").write_text("int answer(void) { return 42; }\n")
+    (package_dir / "mc.toml").write_text(
+        '[project]\nname = "answer"\nkind = "package"\n\n[package]\nsources = ["src/**/*.c"]\n'
+    )
+    res = subprocess.run([str(mc_bin), "build"], cwd=package_dir, capture_output=True, text=True)
+    assert res.returncode == 1
+    assert "packages are built by a consuming application" in res.stderr
+
+
+def package_init_test(tmp):
+    """Package initialization creates headers and no application entry point."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    package_dir = tmp / "package_init"
+    package_dir.mkdir()
+    res = subprocess.run([str(mc_bin), "init", "--package", "https://github.com/acme/mc-json.git"], cwd=package_dir, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    assert (package_dir / "include" / "mc-json").is_dir()
+    assert not (package_dir / "src" / "main.c").exists()
+    assert 'kind = "package"' in (package_dir / "mc.toml").read_text()
+
+
+def package_dependency_test(tmp):
+    """`mc add file://...` locks a package whose exported header is usable by name."""
+    mc_bin = BUILD_DIR / f"mc{EXE}"
+    remote_src = tmp / "json-src"
+    remote = tmp / "json.git"
+    (remote_src / "src").mkdir(parents=True)
+    (remote_src / "include" / "mc-json").mkdir(parents=True)
+    (remote_src / "mc.toml").write_text(
+        '[project]\nname = "mc-json"\nkind = "package"\n\n[package]\nsources = ["src/**/*.c"]\ninclude_dirs = ["include"]\n'
+    )
+    (remote_src / "include" / "mc-json" / "json.h").write_text("int json_answer(void);\n")
+    (remote_src / "src" / "json.c").write_text("int json_answer(void) { return 42; }\n")
+    subprocess.run(["git", "init"], cwd=remote_src, check=True, capture_output=True)
+    subprocess.run(["git", "add", "."], cwd=remote_src, check=True)
+    subprocess.run(["git", "-c", "user.name=mc", "-c", "user.email=mc@example.test", "commit", "-m", "initial"], cwd=remote_src, check=True, capture_output=True)
+    subprocess.run(["git", "clone", "--bare", str(remote_src), str(remote)], check=True, capture_output=True)
+
+    app = tmp / "json-app"
+    (app / "src").mkdir(parents=True)
+    (app / "src" / "main.c").write_text('#include <mc-json/json.h>\nint main(void) { return json_answer() == 42 ? 0 : 1; }\n')
+    (app / "mc.toml").write_text('[project]\nname = "json-app"\n')
+    env = {**os.environ, "MC_PACKAGE_CACHE_DIR": str(tmp / "package-cache")}
+    url = remote.as_uri()
+    res = subprocess.run([str(mc_bin), "add", url], cwd=app, env=env, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    assert "tree_hash = \"sha256:" in (app / "mc.lock").read_text()
+    lock_path = app / "mc.lock"
+    lock = lock_path.read_text()
+    lock_path.write_text(lock.replace("sha256:", "sha256:broken", 1))
+    res = subprocess.run([str(mc_bin), "build", "--locked"], cwd=app, env=env, capture_output=True, text=True)
+    assert res.returncode == 1 and "content hash" in res.stderr, res.stderr
+    lock_path.write_text(lock)
+    res = subprocess.run([str(mc_bin), "build", "--locked"], cwd=app, env=env, capture_output=True, text=True)
+    assert res.returncode == 0, res.stderr
+    assert (app / "bin" / f"json-app{EXE}").exists()
 
 
 def fmt_test(tmp):
@@ -304,4 +377,3 @@ if __name__ == "__main__":
     parser.add_argument("--unit-only", action="store_true", help="Run Zig unit tests only")
     args = parser.parse_args()
     test_toolchain(unit_only=args.unit_only)
-

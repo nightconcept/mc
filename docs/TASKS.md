@@ -9,6 +9,10 @@ what happened, not a living description.
 
 ## Done
 
+- [x] Added URL-sourced C packages: package/application manifests, full Git URL
+      dependencies, shared immutable checkout caching, committed `mc.lock`,
+      `mc add`/`mc update`/`mc build --locked`, source/header graph integration,
+      and local-Git end-to-end coverage.
 - [x] Updated `mc init` to scaffold `src/main.c` (Hello World) and a clean `mc.toml`, changed default LSP `c_standard` to `c99`, and added end-to-end `mc init` test coverage in `test_toolchain.py`.
 - [x] Verified `mc fmt`, `mc lint`, and `mc lsp` subcommands end-to-end in `tests/test_toolchain.py`: fixed a memory lifetime bug in `mc lsp` string array parsing, improved `mc lint` diagnostic line rendering and relative path formatting, and added comprehensive smoke tests covering style overrides, clang-tidy diagnostics, and JSON-RPC LSP compile database generation.
 - [x] Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with

@@ -7,6 +7,7 @@ const lint_pkg = @import("lint");
 const lsp_pkg = @import("lsp");
 const runtime_pkg = @import("runtime");
 const toml_pkg = @import("toml");
+const packages_pkg = @import("packages");
 
 extern fn tcc_main(argc: c_int, argv: [*c][*c]u8) c_int;
 
@@ -18,7 +19,9 @@ const usage =
     \\Usage:
     \\  mc file.c [args]              Compile and run (JIT via tcc)
     \\  mc run file.c -- [args]       Compile and run
-    \\  mc build                      Build the mc.toml project (reads [build])
+    \\  mc build [--locked]           Build the mc.toml project (reads [build])
+    \\  mc add <git-url>              Add a URL package and generate mc.lock
+    \\  mc update [git-url...]        Refresh URL package revisions in mc.lock
     \\  mc build [args]               Build artifact (-c/-S/-o, ...)
     \\  mc lint [--syntax-only] file  Lint (syntax gate + clang-tidy)
     \\  mc fmt [--check] [files|.]    Format with clang-format
@@ -60,11 +63,28 @@ fn run(init: std.process.Init) !u8 {
     }
 
     if (eql(sub, "lsp")) {
-        return lsp_pkg.run(init.io, arena);
+        return lsp_pkg.run(init.io, arena, init.environ_map);
     }
 
     if (eql(sub, "init")) {
-        return runInit(init.io, arena);
+        return runInit(init.io, arena, args[2..]);
+    }
+
+    if (eql(sub, "add")) {
+        if (args.len != 3) return commandUsage(init.io, "Usage: mc add <git-url>\n");
+        const root = try findProjectRoot(init.io, arena);
+        packages_pkg.add(init.io, arena, init.environ_map, root, args[2]) catch |err| {
+            return packageError(init.io, "mc add", err);
+        };
+        return 0;
+    }
+
+    if (eql(sub, "update")) {
+        const root = try findProjectRoot(init.io, arena);
+        packages_pkg.update(init.io, arena, init.environ_map, root, args[2..]) catch |err| {
+            return packageError(init.io, "mc update", err);
+        };
+        return 0;
     }
 
     if (eql(sub, "lint")) {
@@ -108,9 +128,9 @@ fn run(init: std.process.Init) !u8 {
         });
     }
 
-    if (eql(sub, "build") and args.len == 2) {
+    if (eql(sub, "build") and (args.len == 2 or (args.len == 3 and eql(args[2], "--locked")))) {
         const cache = try prepareRuntime(arena, init.io, init.environ_map);
-        return projectBuild(arena, init.io, cache);
+        return projectBuild(arena, init.io, cache, init.environ_map, args.len == 3);
     }
 
     const cache = try prepareRuntime(arena, init.io, init.environ_map);
@@ -184,7 +204,7 @@ const BuildView = struct {
 
 /// resolve `sources` (default `src/**/*.c`), and compile to `target`
 /// (default `bin/<name>[.exe]`) via the embedded tcc.
-fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
+fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8, env: *const std.process.Environ.Map, locked: bool) !u8 {
     var stderr_buf: [1024]u8 = undefined;
     var stderr = Io.File.stderr().writer(io, &stderr_buf);
 
@@ -210,6 +230,20 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
     const build_sec = doc.section("build");
     const project_sec = doc.section("project");
     const name = if (project_sec) |p| p.getString("name") orelse "a" else "a";
+    const kind = packages_pkg.projectKind(&doc) catch {
+        try stderr.interface.writeAll("mc build: invalid project.kind (expected application or package)\n");
+        try stderr.interface.flush();
+        return 1;
+    };
+    if (kind == .package) {
+        try stderr.interface.writeAll("mc build: packages are built by a consuming application\n");
+        try stderr.interface.flush();
+        return 1;
+    }
+    const graph = packages_pkg.resolveLockedGraph(io, arena, env, project_root, locked) catch |err| {
+        return packageError(io, "mc build", err);
+    };
+    defer graph.deinit(arena);
 
     // build.outputs turns one mc.toml into N child builds ([build.<name>]
     // per entry), each inheriting shared keys (defines, include_dirs, ...)
@@ -225,14 +259,14 @@ fn projectBuild(arena: std.mem.Allocator, io: Io, cache: []const u8) !u8 {
         for (names) |out_name| {
             const child_name = try std.fmt.allocPrint(arena, "build.{s}", .{out_name});
             const view: BuildView = .{ .child = doc.section(child_name), .parent = build_sec };
-            const rc = try buildOne(arena, io, cache, &stderr, project_root, view, out_name);
+            const rc = try buildOne(arena, io, cache, &stderr, project_root, view, out_name, graph);
             if (rc != 0) return rc;
         }
         return 0;
     }
 
     const view: BuildView = .{ .child = build_sec, .parent = null };
-    return try buildOne(arena, io, cache, &stderr, project_root, view, name);
+    return try buildOne(arena, io, cache, &stderr, project_root, view, name, graph);
 }
 
 /// Runs one resolve-sources/find-main/link-target build (either the sole
@@ -247,6 +281,7 @@ fn buildOne(
     project_root: []const u8,
     view: BuildView,
     default_name: []const u8,
+    graph: packages_pkg.ResolvedGraph,
 ) !u8 {
     var sources: std.ArrayList([]const u8) = .empty;
     if (view.getArray("sources")) |patterns| {
@@ -255,6 +290,9 @@ fn buildOne(
     if (sources.items.len == 0) {
         try defaultSources(arena, io, project_root, &sources);
     }
+    // Link source packages before application files. Package manifests are
+    // checked by the resolver, so the application still owns the one main().
+    try sources.insertSlice(arena, 0, graph.sources);
 
     if (sources.items.len == 0) {
         try stderr.interface.writeAll(
@@ -320,6 +358,10 @@ fn buildOne(
             try tcc_argv.append(arena, "-I");
             try tcc_argv.append(arena, try arena.dupeZ(u8, full));
         }
+    }
+    for (graph.include_dirs) |dir| {
+        try tcc_argv.append(arena, "-I");
+        try tcc_argv.append(arena, try arena.dupeZ(u8, dir));
     }
     if (view.getArray("defines")) |defs| {
         for (defs) |d| try tcc_argv.append(arena, try std.fmt.allocPrintSentinel(arena, "-D{s}", .{d}, 0));
@@ -498,7 +540,7 @@ fn findProjectRoot(io: std.Io, allocator: std.mem.Allocator) ![]const u8 {
     return dir;
 }
 
-fn runInit(io: std.Io, allocator: std.mem.Allocator) !u8 {
+fn runInit(io: std.Io, allocator: std.mem.Allocator, args: []const []const u8) !u8 {
     var buffer: [512]u8 = undefined;
     var stderr = Io.File.stderr().writer(io, &buffer);
 
@@ -507,8 +549,17 @@ fn runInit(io: std.Io, allocator: std.mem.Allocator) !u8 {
         try stderr.interface.flush();
         return 1;
     }
-    try initScaffold(io, allocator);
-    return 0;
+    if (args.len == 0) {
+        try initScaffold(io, allocator);
+        return 0;
+    }
+    if (args.len == 2 and eql(args[0], "--package")) {
+        packages_pkg.initPackage(io, allocator, args[1]) catch |err| return packageError(io, "mc init", err);
+        return 0;
+    }
+    try stderr.interface.writeAll("Usage: mc init [--package <git-url>]\n");
+    try stderr.interface.flush();
+    return 1;
 }
 
 fn initScaffold(
@@ -562,6 +613,35 @@ fn initScaffold(
 
 fn eql(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);
+}
+
+fn commandUsage(io: Io, message: []const u8) !u8 {
+    var buffer: [512]u8 = undefined;
+    var stderr = Io.File.stderr().writer(io, &buffer);
+    try stderr.interface.writeAll(message);
+    try stderr.interface.flush();
+    return 1;
+}
+
+fn packageError(io: Io, prefix: []const u8, err: anyerror) !u8 {
+    const message = switch (err) {
+        error.InvalidDependencyUrl => "invalid Git URL",
+        error.MissingLockfile => "dependencies require mc.lock; run `mc add <git-url>` or `mc update`",
+        error.MissingLockEntry => "mc.lock does not match mc.toml; run `mc update`",
+        error.LockIntegrityMismatch => "mc.lock content hash does not match its checkout",
+        error.DependencyCycle => "dependency cycle detected",
+        error.PackageDefinesMain => "a package source defines main()",
+        error.InvalidPackageManifest => "invalid package manifest",
+        error.InvalidProjectKind => "invalid project.kind (expected application or package)",
+        error.UnsafePath => "package path must be relative and stay inside the package",
+        error.GitFailed => "Git could not resolve or fetch the dependency",
+        else => @errorName(err),
+    };
+    var buffer: [512]u8 = undefined;
+    var stderr = Io.File.stderr().writer(io, &buffer);
+    try stderr.interface.print("{s}: {s}\n", .{ prefix, message });
+    try stderr.interface.flush();
+    return 1;
 }
 
 test "routes commands" {

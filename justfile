@@ -43,10 +43,10 @@ check:
     zig build check
 
 fmt:
-    zig fmt src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig build.zig
+    zig fmt src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig src/toml/toml.zig src/packages/packages.zig build.zig
 
 fmt-check:
-    zig fmt --check src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig build.zig
+    zig fmt --check src/cli/mc.zig src/fmt/format.zig src/lint/lint.zig src/lsp/lsp.zig src/toml/toml.zig src/packages/packages.zig build.zig
 
 lint file:
     ./build/mc lint {{file}}
@@ -61,4 +61,3 @@ ci:
     just build
     just test
     just package
-

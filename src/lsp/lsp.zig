@@ -4,13 +4,14 @@
 const std = @import("std");
 const toml = @import("toml");
 const fmt_pkg = @import("fmt"); // for findTool
+const packages = @import("packages");
 
 /// Entry point called by mc.zig for `mc lsp`.
-pub fn run(io: std.Io, allocator: std.mem.Allocator) !u8 {
+pub fn run(io: std.Io, allocator: std.mem.Allocator, env: *const std.process.Environ.Map) !u8 {
     const project_root = try findProjectRoot(io, allocator);
     defer allocator.free(project_root);
 
-    const build_cfg = try loadBuildConfig(io, project_root, allocator);
+    const build_cfg = try loadBuildConfig(io, project_root, allocator, env);
     defer build_cfg.deinit(allocator);
 
     const cache_dir = try std.fs.path.join(allocator, &.{ project_root, ".mccache" });
@@ -93,6 +94,7 @@ const BuildConfig = struct {
     include_dirs: []const []const u8,
     defines: []const []const u8,
     sources: []const []const u8,
+    package_sources: []const []const u8,
     clangd_args: []const []const u8,
 
     fn deinit(self: *const BuildConfig, allocator: std.mem.Allocator) void {
@@ -103,6 +105,8 @@ const BuildConfig = struct {
         allocator.free(self.defines);
         for (self.sources) |s| allocator.free(s);
         allocator.free(self.sources);
+        for (self.package_sources) |s| allocator.free(s);
+        allocator.free(self.package_sources);
         for (self.clangd_args) |a| allocator.free(a);
         allocator.free(self.clangd_args);
     }
@@ -117,7 +121,7 @@ fn dupeStringArray(allocator: std.mem.Allocator, arr: ?[]const []const u8) ![]co
     return out;
 }
 
-fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allocator) !BuildConfig {
+fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allocator, env: *const std.process.Environ.Map) !BuildConfig {
     const toml_path = try std.fs.path.join(allocator, &.{ project_root, "mc.toml" });
     defer allocator.free(toml_path);
 
@@ -135,13 +139,30 @@ fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allo
             const src_val = if (build_sec) |s| s.getArray("sources") else null;
             const lsp_val = if (lsp_sec) |s| s.getArray("clangd_args") else null;
 
-            return .{
+            var cfg = BuildConfig{
                 .c_standard = try allocator.dupe(u8, std_val),
                 .include_dirs = try dupeStringArray(allocator, inc_val),
                 .defines = try dupeStringArray(allocator, def_val),
                 .sources = try dupeStringArray(allocator, src_val),
+                .package_sources = try allocator.alloc([]const u8, 0),
                 .clangd_args = try dupeStringArray(allocator, lsp_val),
             };
+            errdefer cfg.deinit(allocator);
+            const graph = packages.resolveLockedGraph(io, allocator, env, project_root, false) catch |err| switch (err) {
+                error.MissingLockfile => return cfg,
+                else => return err,
+            };
+            defer graph.deinit(allocator);
+            const merged = try allocator.alloc([]const u8, cfg.include_dirs.len + graph.include_dirs.len);
+            for (cfg.include_dirs, 0..) |dir, index| merged[index] = dir;
+            for (graph.include_dirs, 0..) |dir, index| merged[cfg.include_dirs.len + index] = try allocator.dupe(u8, dir);
+            allocator.free(cfg.include_dirs);
+            cfg.include_dirs = merged;
+            allocator.free(cfg.package_sources);
+            var package_sources = try allocator.alloc([]const u8, graph.sources.len);
+            for (graph.sources, 0..) |source, index| package_sources[index] = try allocator.dupe(u8, source);
+            cfg.package_sources = package_sources;
+            return cfg;
         } else |_| {}
     } else |_| {}
 
@@ -150,6 +171,7 @@ fn loadBuildConfig(io: std.Io, project_root: []const u8, allocator: std.mem.Allo
         .include_dirs = try allocator.alloc([]const u8, 0),
         .defines = try allocator.alloc([]const u8, 0),
         .sources = try allocator.alloc([]const u8, 0),
+        .package_sources = try allocator.alloc([]const u8, 0),
         .clangd_args = try allocator.alloc([]const u8, 0),
     };
 }
@@ -182,6 +204,7 @@ fn generateCompileCommands(
     } else {
         try expandSources(io, project_root, "**/*.c", &sources, allocator);
     }
+    for (cfg.package_sources) |source| try sources.append(allocator, try allocator.dupe(u8, source));
 
     var cmd_base: std.ArrayList(u8) = .empty;
     defer cmd_base.deinit(allocator);

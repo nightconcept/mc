@@ -229,13 +229,14 @@ def build():
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
         ZIG, "build-exe", "-O", "ReleaseSafe", f"-femit-bin=build/mc{EXE}",
-        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml",
+        "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml", "--dep", "packages",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
         "--dep", "toml", "--dep", "fmt", f"-Mlint={ROOT / 'src' / 'lint' / 'lint.zig'}",
-        "--dep", "toml", "--dep", "fmt", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
+        "--dep", "toml", "--dep", "fmt", "--dep", "packages", f"-Mlsp={ROOT / 'src' / 'lsp' / 'lsp.zig'}",
         "--dep", "toml=toml_ext", f"-Mtoml={ROOT / 'src' / 'toml' / 'toml.zig'}",
         f"-Mtoml_ext={toml_pkg}",
+        "--dep", "toml", f"-Mpackages={ROOT / 'src' / 'packages' / 'packages.zig'}",
         f"-Mruntime={BUILD_DIR / 'runtime_embed.zig'}",
         str(driver_renamed), *include_flags, "-lc", *TCC_LIBS,
     ])

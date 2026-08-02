@@ -10,6 +10,8 @@
 - `src/lint/lint.zig` — `mc lint` (clang-tidy wrapper)
 - `src/lsp/lsp.zig` — `mc lsp` (clangd bridge)
 - `src/toml/toml.zig` — `mc.toml` config parsing, shared by fmt/lint
+- `src/packages/packages.zig` — package manifests, URL Git resolution,
+  shared immutable checkout cache, `mc.lock`, and resolved C source graphs
 - `build/` — out-of-tree build output (objects, libs, `tcc`, `mc`); repo
   root and `src/` stay clean
 - `dist/` — packaged output from `just package`
@@ -43,3 +45,12 @@ comments in `scripts/build.py` if you're touching that path.
 Each `src/<name>/` package is a separate Zig module wired together via
 `--dep`/`-M` flags in `build.zig` and in `tests/test_toolchain.py`'s
 `zig_unit_tests()`. When adding a new package, wire it in both places.
+
+## URL packages
+
+`src/packages/` keeps package acquisition outside the CLI and compiler. It
+accepts full Git URLs for any host, resolves mutable refs only for `mc add`
+and `mc update`, and records commit IDs plus SHA-256 source-archive hashes in
+the committed `mc.lock`. Builds read that lock and use immutable checkouts in
+the platform cache (`MC_PACKAGE_CACHE_DIR` overrides it). The resolver returns
+only source files and exported include roots to `mc build` and `mc lsp`.

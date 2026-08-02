@@ -77,6 +77,10 @@ pub const Document = struct {
         }
         return null;
     }
+
+    pub fn root(self: *const Document) ?*const Table {
+        return self.section("");
+    }
 };
 
 pub const ParseError = error{
@@ -100,13 +104,18 @@ pub fn parse(source: []const u8, allocator: std.mem.Allocator) ParseError!Docume
         tables.deinit(allocator);
     }
 
+    var root_entries: std.StringHashMapUnmanaged(Value) = .empty;
+    errdefer root_entries.deinit(allocator);
     var it = parsed.value.iterator();
     while (it.next()) |entry| {
         switch (entry.value_ptr.*) {
             .table => |sec_table| try collectTable(allocator, entry.key_ptr.*, sec_table, &tables),
-            else => {},
+            else => try root_entries.put(allocator, entry.key_ptr.*, try convertValue(entry.value_ptr.*, allocator)),
         }
     }
+    if (root_entries.count() != 0) {
+        try tables.append(allocator, .{ .section = try allocator.dupe(u8, ""), .entries = root_entries });
+    } else root_entries.deinit(allocator);
 
     return .{
         .tables = try tables.toOwnedSlice(allocator),
@@ -190,6 +199,12 @@ test "parse basic mc.toml" {
 
     const fmt_sec = doc.section("fmt").?;
     try std.testing.expectEqual(@as(i64, 120), fmt_sec.get("ColumnLimit").?.asInteger().?);
+}
+
+test "parse root dependency URLs" {
+    var doc = try parse("dependencies = [\"https://forge.example/acme/json\"]\n[project]\nname = \"app\"\n", std.testing.allocator);
+    defer doc.deinit();
+    try std.testing.expectEqualStrings("https://forge.example/acme/json", doc.root().?.getArray("dependencies").?[0]);
 }
 
 test "parse nested [build.<name>] sub-tables" {
