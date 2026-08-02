@@ -25,6 +25,17 @@ Run the smallest relevant test suite before committing — see
 `docs/testing.md`. Legacy tests always gate before toolchain tests;
 `just test` enforces that order.
 
+## Branch workflow
+
+`main` is the only integration branch. Start every change from current `main`
+on a short-lived topic branch such as `feat/format-rules` or `fix/windows-lib`.
+Make conventional commits, run the smallest relevant local check, then open a
+pull request to `main`.
+
+The pull request must pass the required Linux, macOS, and Windows CI checks
+before it merges. Do not push directly to `main`. Delete the topic branch after
+the pull request merges.
+
 ## Tool pins
 
 Toolchain versions (`zig`, `python`, `just`, `lefthook`) are pinned in
