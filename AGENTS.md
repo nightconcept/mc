@@ -66,21 +66,13 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
-- Adopted a PR-gated `main` workflow with no bypass, required platform CI,
-  `edge` releases from `main`, and no `dev` branch or compatibility shim.
+- Added 2x weekly scheduled and force-dispatch release workflow on main targeting yyyy.mm.dd-mc-<hash> releases, and removed legacy edge pre-releases.
+- Adopted a PR-gated `main` workflow with no bypass, required platform CI, and no `dev` branch.
 - Added URL-sourced C packages: package/application manifests, full Git URL dependencies, shared immutable checkout caching, committed `mc.lock`, `mc add`/`mc update`/`mc build --locked`, source/header graph integration, and local-Git end-to-end coverage.
-
 - Updated `mc init` to scaffold `src/main.c` (Hello World) and a clean `mc.toml`, changed default LSP `c_standard` to `c99`, and added `mc init` test coverage in `test_toolchain.py`.
 - Verified `mc fmt`, `mc lint`, and `mc lsp` end-to-end in `test_toolchain.py`; fixed `mc lsp` memory lifetime bug and `mc lint` diagnostic snippet rendering.
-- Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with
-  SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix,
-  updated the pinned stress fixture, and smoke-tested dummy video/audio.
-- Added `build.lib_dirs`/`build.libs` to project-mode `mc build` (`-L`/`-l`,
-  `lib_dirs` defaulting to `lib/` if present); vendored `mc-mods/doomgeneric-sdl`
-  as the first consumer.
-- Added `tests/stress/run_stress.py` (`just test-stress`): builds/smoke-tests
-  `mc-mods`' sqlite3 and lua/luac projects via project-mode `mc build`.
-- Added a multi-`main()` guard to project-mode `mc build`.
+- Enabled sound effects and music for `mc-mods/doomgeneric-sdl` with SDL2_mixer 2.8.1, added the `_WIN32` `<strings.h>` compatibility fix, updated the pinned stress fixture, and smoke-tested dummy video/audio.
+- Added `build.lib_dirs`/`build.libs` to project-mode `mc build` (`-L`/`-l`, `lib_dirs` defaulting to `lib/` if present); vendored `mc-mods/doomgeneric-sdl` as the first consumer.
 
 ## Engineering Standards
 
