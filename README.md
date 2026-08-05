@@ -49,7 +49,7 @@ just gate-fast       # fmt + zig unit tests (pre-commit; needs a prior `just bui
 just gate            # gate-fast + build + full test suite (pre-push)
 ```
 
-To update the TinyCC dependency to the latest commit on its `mtc` branch:
+To update the TinyCC dependency to the latest commit on its `mc` branch:
 
 ```sh
 just update-tinycc

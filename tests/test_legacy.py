@@ -43,6 +43,7 @@ SKIP_WINDOWS = {
     "106_versym", "112_backtrace", "113_btdll", "114_bound_signal",
     "115_bound_setjmp", "116_bound_setjmp2", "117_builtins", "124_atomic_counter",
     "126_bound_global", "132_bound_test", "144_tls", "146_tls_extern",
+    "148_linker_symbols", "149_end_copy_reloc", "150_linker_boundaries", "151_dso_linker_symbol",
 }
 SKIP_OSX = {"144_tls", "146_tls_extern"}
 

@@ -19,7 +19,7 @@
 ## TinyCC dependency
 
 TinyCC is not vendored in this repo. `build.zig.zon` pins a commit on
-nightconcept/tinycc's `mtc` branch, fetched into the Zig global package
+nightconcept/tinycc's `mc` branch, fetched into the Zig global package
 cache. `just update-tinycc` pushes local tcc changes to that branch and
 re-pins the fetched revision.
 
