@@ -52,10 +52,10 @@ lint file:
     ./build/mc lint {{file}}
 
 # ── meta ──────────────────────────────────────────────────────────────────────
-# Update TinyCC: push changes to nightconcept/tinycc mtc branch, then run:
+# Update TinyCC: push changes to nightconcept/tinycc mc branch, then run:
 # just update-tinycc
 update-tinycc:
-    mise exec -- zig fetch --save=tinycc https://github.com/nightconcept/tinycc/archive/refs/heads/mtc.tar.gz
+    mise exec -- zig fetch --save=tinycc https://github.com/nightconcept/tinycc/archive/refs/heads/mc.tar.gz
 
 ci:
     just build
