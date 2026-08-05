@@ -7,8 +7,8 @@
             .hash = "toml-0.3.0-bV14BRmKAQAWR0FT0KUKFwVJTImaFhWjSe6HfSMtNZOH",
         },
         .tinycc = .{
-            .url = "https://github.com/nightconcept/tinycc/archive/refs/heads/mtc.tar.gz",
-            .hash = "N-V-__8AANwKRgAqu4eI5Fh8bwMkX7bHOT1jFWpMAfucQjsc",
+            .url = "https://github.com/nightconcept/tinycc/archive/refs/heads/mc.tar.gz",
+            .hash = "N-V-__8AAO09RgB1lnVFXGTlWdy_VkdQiv0BL2Tw733FsEqg",
         },
     },
     .paths = .{""},
