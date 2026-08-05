@@ -13,7 +13,7 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - Monorepo: `src/<name>/` holds each first-party package; root is workspace
   tooling only (`justfile`, `mise.toml`, `scripts/`)
 - `src/cli/mc.zig` — the `mc` CLI frontend
-- `build.zig.zon` — declares the TinyCC dep (nightconcept/tinycc `mtc`
+- `build.zig.zon` — declares the TinyCC dep (nightconcept/tinycc `mc`
   branch, pinned to a commit/ref; update with `just update-tinycc`)
 - TinyCC sources live in the Zig global package cache (not in the repo);
   its runtime library (`libtcc1.a` + headers) is self-hosted-compiled and
@@ -55,7 +55,7 @@ compiler is a thin `mc` frontend (Zig) around TinyCC; first-party packages
 - **Package**: `just package` — copies `build/mc` into `dist/`
 - **Format Zig**: `just fmt`
 - **Lint C**: `./build/mc lint <file.c>` after `just build`
-- **Update TinyCC**: push to nightconcept/tinycc `mtc` branch, then
+- **Update TinyCC**: push to nightconcept/tinycc `mc` branch, then
   `just update-tinycc`
 
 ## Progress Log

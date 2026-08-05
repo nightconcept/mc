@@ -27,6 +27,6 @@ distinct from the `mc build`/`mc run` CLI commands, which compile a
   x86_64/arm64) — see `docs/architecture.md` for how the runtime is
   assembled and embedded.
 - Updating the TinyCC dependency is a separate step from a normal build:
-  push to nightconcept/tinycc's `mtc` branch, then run `just update-tinycc`
+  push to nightconcept/tinycc's `mc` branch, then run `just update-tinycc`
   to re-pin `build.zig.zon`. Keep that as its own commit, separate from
   `mc`-side changes.
