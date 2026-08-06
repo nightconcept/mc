@@ -17,6 +17,7 @@ pub const RunArgs = struct {
     project_root: []const u8,
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ_map: ?*const std.process.Environ.Map = null,
 };
 
 /// Entry point called by mc.zig for the clang-tidy semantic pass.
@@ -36,7 +37,7 @@ pub fn run(ra: RunArgs) !u8 {
     defer alloc.free(cfg.checks);
     defer alloc.free(cfg.header_filter);
 
-    const clang_tidy = fmt_pkg.findTool(ra.io, "clang-tidy", alloc) catch {
+    const clang_tidy = fmt_pkg.findTool(ra.io, "clang-tidy", alloc, ra.environ_map) catch {
         var buffer: [512]u8 = undefined;
         var stderr = std.Io.File.stderr().writer(ra.io, &buffer);
         try stderr.interface.writeAll("mc lint: clang-tidy not found on PATH or .tools/\nRun: just fetch-tools\n");

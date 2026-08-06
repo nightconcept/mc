@@ -20,7 +20,7 @@ pub fn run(io: std.Io, allocator: std.mem.Allocator, env: *const std.process.Env
 
     try generateCompileCommands(io, project_root, &build_cfg, cache_dir, allocator);
 
-    const clangd = fmt_pkg.findTool(io, "clangd", allocator) catch {
+    const clangd = fmt_pkg.findTool(io, "clangd", allocator, env) catch {
         var buffer: [512]u8 = undefined;
         var stdout = std.Io.File.stdout().writer(io, &buffer);
         const msg =
