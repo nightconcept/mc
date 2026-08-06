@@ -66,6 +66,7 @@ One line per completed `docs/TASKS.md` item, most recent first. Prune old
 entries to keep this file ≤100 lines; the detailed record lives in
 `docs/TASKS.md`.
 
+- Ported custom multi-step T1 build recipes in test_legacy.py for tests 148-151 (linker symbols, copy relocations, linker boundaries, DSO symbols) and fixed tool PATH resolution in src/fmt/format.zig.
 - Added 2x weekly scheduled and force-dispatch release workflow on main targeting yyyy.mm.dd-mc-<hash> releases, and removed legacy edge pre-releases.
 - Adopted a PR-gated `main` workflow with no bypass, required platform CI, and no `dev` branch.
 - Added URL-sourced C packages: package/application manifests, full Git URL dependencies, shared immutable checkout caching, committed `mc.lock`, `mc add`/`mc update`/`mc build --locked`, source/header graph integration, and local-Git end-to-end coverage.
