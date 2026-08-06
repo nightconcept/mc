@@ -9,6 +9,7 @@ what happened, not a living description.
 
 ## Done
 
+- [x] Ported custom multi-step T1 build recipes in test_legacy.py for tests 148-151 (linker symbols, copy relocations, linker boundaries, DSO symbols) and fixed tool PATH resolution in src/fmt/format.zig.
 - [x] Added 2x weekly scheduled and force-dispatch release workflow on main targeting yyyy.mm.dd-mc-<hash> releases, and removed legacy edge pre-releases.
 - [x] Adopted a PR-gated `main` workflow: added a no-bypass GitHub ruleset
       requiring Linux/macOS/Windows CI, moved `edge` publishing to `main`,
