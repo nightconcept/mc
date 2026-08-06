@@ -8,6 +8,7 @@ multi-step/non-`-run` invocation (see src/tests/tests2/Makefile) — those are
 mirrored below where simple (FLAGS/ARGS/NORUN) and skipped where the
 Makefile uses a custom multi-file/T1 recipe we haven't ported.
 """
+import os
 import platform
 import re
 import subprocess
@@ -30,10 +31,6 @@ SKIP_CUSTOM_RECIPE = {
     "120_alias",
     "144_tls",
     "146_tls_extern",
-    "148_linker_symbols",
-    "149_end_copy_reloc",
-    "150_linker_boundaries",
-    "151_dso_linker_symbol",
 }
 
 # Architecture/OS-specific gaps, mirrored from tests/tests2/Makefile's SKIP
@@ -47,8 +44,12 @@ SKIP_WINDOWS = {
     "106_versym", "112_backtrace", "113_btdll", "114_bound_signal",
     "115_bound_setjmp", "116_bound_setjmp2", "117_builtins", "124_atomic_counter",
     "126_bound_global", "132_bound_test", "144_tls", "146_tls_extern",
+    "148_linker_symbols", "149_end_copy_reloc", "150_linker_boundaries", "151_dso_linker_symbol",
 }
-SKIP_OSX = {"144_tls", "146_tls_extern"}
+SKIP_OSX = {
+    "144_tls", "146_tls_extern", "148_linker_symbols", "149_end_copy_reloc",
+    "150_linker_boundaries", "151_dso_linker_symbol",
+}
 
 # Per-test flags/args, mirrored from tests/tests2/Makefile.
 EXTRA_FLAGS = {
@@ -81,6 +82,84 @@ KNOWN_ARM64_GAPS = {"127_asm_goto"}
 # the check still runs and reports the right violation, just with one more
 # frame than the vendored .expect anticipates.
 KNOWN_SELFHOST_GAPS = {"112_backtrace"}
+
+CUSTOM_RECIPES = {
+    "148_linker_symbols",
+    "149_end_copy_reloc",
+    "150_linker_boundaries",
+    "151_dso_linker_symbol",
+}
+
+
+def run_custom_recipe(name, tcc, runtime, tests_dir):
+    """Run T1 multi-step build recipes from tests/tests2/Makefile."""
+    dll_suf = ".dll" if IS_WINDOWS else ".so"
+    if name == "148_linker_symbols":
+        cmd1 = [str(tcc), f"-B{runtime}", "-I", ".", "-c", "148+_linker_symbols.c", "-o", "148_linker_symbols.o"]
+        r1 = subprocess.run(cmd1, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r1.returncode != 0:
+            return r1.returncode, r1.stdout
+        cmd2 = [str(tcc), "-ar", "rcs", "148_linker_symbols.a", "148_linker_symbols.o"]
+        r2 = subprocess.run(cmd2, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r2.returncode != 0:
+            return r2.returncode, r2.stdout
+        cmd3 = [str(tcc), f"-B{runtime}", "-I", ".", "148_linker_symbols.c", "148_linker_symbols.a", "-o", "148_linker_symbols.exe"]
+        r3 = subprocess.run(cmd3, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r3.returncode != 0:
+            return r3.returncode, r3.stdout
+        res1 = subprocess.run(["./148_linker_symbols.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        cmd4 = [str(tcc), f"-B{runtime}", "-I", ".", "148+override_linker_symbols.c", "-o", "148_linker_symbols-override.exe"]
+        r4 = subprocess.run(cmd4, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r4.returncode != 0:
+            return r4.returncode, r4.stdout
+        res2 = subprocess.run(["./148_linker_symbols-override.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        return res2.returncode, res1.stdout + res2.stdout
+
+    if name == "149_end_copy_reloc":
+        cmd1 = [str(tcc), f"-B{runtime}", "-I", ".", "-shared", "149+_end_copy_reloc.c", "-o", f"149_end_copy_reloc{dll_suf}"]
+        r1 = subprocess.run(cmd1, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r1.returncode != 0:
+            return r1.returncode, r1.stdout
+        cmd2 = [str(tcc), f"-B{runtime}", "-I", ".", "149_end_copy_reloc.c", f"./149_end_copy_reloc{dll_suf}", "-Wl,-rpath=.", "-o", "149_end_copy_reloc.exe"]
+        r2 = subprocess.run(cmd2, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r2.returncode != 0:
+            return r2.returncode, r2.stdout
+        res1 = subprocess.run(["./149_end_copy_reloc.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+        cmd3 = [str(tcc), f"-B{runtime}", "-I", ".", "149+override_end_copy_reloc.c", f"./149_end_copy_reloc{dll_suf}", "-Wl,-rpath=.", "-o", "149_end_copy_reloc-override.exe"]
+        r3 = subprocess.run(cmd3, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r3.returncode != 0:
+            return r3.returncode, r3.stdout
+        res2 = subprocess.run(["./149_end_copy_reloc-override.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        return res2.returncode, res1.stdout + res2.stdout
+
+    if name == "150_linker_boundaries":
+        cc = os.environ.get("CC", "cc")
+        cmd1 = [cc, "-fcommon", "-fno-pic", "-fno-pie", "-c", "150+_linker_boundaries.c", "-o", "150_linker_boundaries.o"]
+        r1 = subprocess.run(cmd1, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r1.returncode != 0:
+            return r1.returncode, r1.stdout
+        cmd2 = [str(tcc), f"-B{runtime}", "-I", ".", "150_linker_boundaries.c", "150_linker_boundaries.o", "-o", "150_linker_boundaries.exe"]
+        r2 = subprocess.run(cmd2, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r2.returncode != 0:
+            return r2.returncode, r2.stdout
+        res = subprocess.run(["./150_linker_boundaries.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        return res.returncode, res.stdout
+
+    if name == "151_dso_linker_symbol":
+        cmd1 = [str(tcc), f"-B{runtime}", "-I", ".", "-shared", "151+_dso_linker_symbol.c", "-o", f"151_dso_linker_symbol{dll_suf}"]
+        r1 = subprocess.run(cmd1, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r1.returncode != 0:
+            return r1.returncode, r1.stdout
+        cmd2 = [str(tcc), f"-B{runtime}", "-I", ".", "151_dso_linker_symbol.c", f"./151_dso_linker_symbol{dll_suf}", "-Wl,-rpath=.", "-o", "151_dso_linker_symbol.exe"]
+        r2 = subprocess.run(cmd2, cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if r2.returncode != 0:
+            return r2.returncode, r2.stdout
+        res = subprocess.run(["./151_dso_linker_symbol.exe"], cwd=tests_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        return res.returncode, res.stdout
+
+    raise ValueError(f"Unknown custom recipe for test {name}")
 
 
 def host_arch():
@@ -135,6 +214,18 @@ def test_legacy():
         if not expect.exists() or name in skip:
             continue
         total += 1
+
+        if name in CUSTOM_RECIPES:
+            rc, actual = run_custom_recipe(name, tcc, runtime, tests_dir)
+            expected = expect.read_text()
+            normalize = lambda s: "\n".join(line.rstrip() for line in s.splitlines())
+            ok = rc == 0 and normalize(actual) == normalize(expected)
+            if ok:
+                passed += 1
+            else:
+                detail = f"--- expected ---\n{expected!r}\n--- actual ---\n{actual!r}"
+                unexpected.append(f"{name}: rc={rc}\n{detail}")
+            continue
 
         # Invoked with cwd=tests_dir and a bare filename so tcc's diagnostics
         # print short names ("03_struct.c:14: ...") matching .expect, same

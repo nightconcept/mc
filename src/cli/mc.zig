@@ -59,6 +59,7 @@ fn run(init: std.process.Init) !u8 {
             .project_root = project_root,
             .allocator = arena,
             .io = init.io,
+            .environ_map = init.environ_map,
         });
     }
 
@@ -125,6 +126,7 @@ fn run(init: std.process.Init) !u8 {
             .project_root = project_root,
             .allocator = arena,
             .io = init.io,
+            .environ_map = init.environ_map,
         });
     }
 

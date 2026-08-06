@@ -18,6 +18,7 @@ pub const RunArgs = struct {
     project_root: []const u8,
     allocator: std.mem.Allocator,
     io: std.Io,
+    environ_map: ?*const std.process.Environ.Map = null,
 };
 
 /// Entry point called by mc.zig for `mc fmt`.
@@ -58,7 +59,7 @@ pub fn run(ra: RunArgs) !u8 {
     const style = try resolveStyle(ra.io, ra.project_root, alloc);
     defer alloc.free(style);
 
-    return runClangFormat(ra.io, paths.items, style, check_only, alloc);
+    return runClangFormat(ra.io, paths.items, style, check_only, alloc, ra.environ_map);
 }
 
 fn collectCFiles(io: std.Io, root: []const u8, out: *std.ArrayList([]const u8), alloc: std.mem.Allocator) !void {
@@ -143,8 +144,9 @@ fn runClangFormat(
     style: []const u8,
     check_only: bool,
     alloc: std.mem.Allocator,
+    environ_map: ?*const std.process.Environ.Map,
 ) !u8 {
-    const clang_fmt = findTool(io, "clang-format", alloc) catch {
+    const clang_fmt = findTool(io, "clang-format", alloc, environ_map) catch {
         var buffer: [512]u8 = undefined;
         var stderr = std.Io.File.stderr().writer(io, &buffer);
         try stderr.interface.writeAll("mc fmt: clang-format not found on PATH or .tools/\nRun: just fetch-tools\n");
@@ -177,7 +179,7 @@ fn runClangFormat(
     };
 }
 
-pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator) ![]const u8 {
+pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator, env: ?*const std.process.Environ.Map) ![]const u8 {
     // Executables carry a .exe suffix on Windows; the fetched tools in .tools/
     // (and anything on PATH) are e.g. clang-format.exe, so look for that name.
     const exe_name = if (builtin.os.tag == .windows)
@@ -186,15 +188,16 @@ pub fn findTool(io: std.Io, name: []const u8, alloc: std.mem.Allocator) ![]const
         name;
     defer if (builtin.os.tag == .windows) alloc.free(exe_name);
 
-    if (std.process.Environ.empty.getAlloc(alloc, "PATH")) |path_env| {
-        defer alloc.free(path_env);
-        var it = std.mem.splitScalar(u8, path_env, if (std.fs.path.sep == '\\') ';' else ':');
-        while (it.next()) |dir| {
-            const candidate = try std.fs.path.join(alloc, &.{ dir, exe_name });
-            defer alloc.free(candidate);
-            if (fileExists(io, candidate)) return alloc.dupe(u8, candidate);
+    if (env) |e| {
+        if (e.get("PATH")) |path_env| {
+            var it = std.mem.splitScalar(u8, path_env, if (std.fs.path.sep == '\\') ';' else ':');
+            while (it.next()) |dir| {
+                const candidate = try std.fs.path.join(alloc, &.{ dir, exe_name });
+                defer alloc.free(candidate);
+                if (fileExists(io, candidate)) return alloc.dupe(u8, candidate);
+            }
         }
-    } else |_| {}
+    }
 
     const exe_path = try std.process.executablePathAlloc(io, alloc);
     defer alloc.free(exe_path);
