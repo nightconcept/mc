@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Compile TinyCC (C) and the mc Zig frontend into build/."""
+import argparse
 import platform
 import re
 import shutil
@@ -18,6 +19,16 @@ from _env import (
 #    runtime for -run's main-wrapper, backtraces, and bounds checking)
 COMMON_ARCHIVE = ["stdatomic.c", "atomic.S", "builtin.c", "alloca.S", "alloca-bt.S", "tcov.c"]
 COMMON_LOOSE = ["runmain.c", "bt-exe.c", "bt-log.c", "bcheck.c"]
+
+# Zig defaults to -mcpu=native, which bakes the *build machine's* ISA extensions
+# into the binary. That is fine for a developer building for their own box, but
+# fatal for a published artifact: a release built on a CI runner with AVX-512
+# dies with SIGILL on any older CPU. `just build` keeps the fast native default;
+# `just build-portable` (used by `just ci`, which produces the release artifacts)
+# passes --cpu baseline for a generic, runs-anywhere binary.
+DEFAULT_CPU = "native"
+# Written by build(), read by package.py to refuse shipping a native-CPU binary.
+CPU_STAMP = "cpu.txt"
 
 
 def host_arch():
@@ -71,10 +82,16 @@ def ensure_zig_mingw_mm_malloc():
         shutil.copy(lib_dir / "include" / "mm_malloc.h", mm_malloc)
 
 
-def build():
+def build(cpu=DEFAULT_CPU):
     if BUILD_DIR.exists():
         shutil.rmtree(BUILD_DIR)
     BUILD_DIR.mkdir(parents=True)
+    (BUILD_DIR / CPU_STAMP).write_text(cpu + "\n")
+
+    # Applies to every zig-driven compile/link below. The runtime-support objects
+    # are self-compiled by tcc, whose x86-64 backend emits only baseline
+    # instructions, so they need no equivalent flag.
+    cpu_flags = [f"-mcpu={cpu}"]
 
     compiler_dir = tinycc_dir()
     os_name = "windows" if IS_WINDOWS else platform.system().lower()
@@ -108,7 +125,10 @@ def build():
     include_flags = ["-I", str(config_dir), "-I", str(compiler_dir)]
 
     def compile_obj(src, obj, extra_flags=()):
-        run([ZIG, "cc", "-c", str(src), "-o", str(obj), *include_flags, "-O2", *extra_flags])
+        run([
+            ZIG, "cc", "-c", str(src), "-o", str(obj),
+            *include_flags, "-O2", *cpu_flags, *extra_flags,
+        ])
 
     # On multiarch Linux (Debian/Ubuntu) libc's headers and shared objects live
     # in per-triplet subdirs (/usr/include/<triplet>, /usr/lib/<triplet>) rather
@@ -147,7 +167,7 @@ def build():
     driver_plain = BUILD_DIR / f"tcc-driver-plain{OBJ}"
     compile_obj(compiler_dir / "tcc.c", driver_plain, driver_defines)
     tcc_exe = BUILD_DIR / f"tcc{EXE}"
-    run([ZIG, "cc", str(driver_plain), "-o", str(tcc_exe), *TCC_LIBS])
+    run([ZIG, "cc", str(driver_plain), "-o", str(tcc_exe), *cpu_flags, *TCC_LIBS])
 
     # Runtime-support library (libtcc1.a): TinyCC's lib/*.c and *.S sources
     # are dual-mode (`#ifdef __TINYC__` vs. a real-compiler branch) and,
@@ -228,7 +248,7 @@ def build():
     # Build mc frontend linking Zig packages
     toml_pkg = package_dir("toml") / "src" / "root.zig"
     run([
-        ZIG, "build-exe", "-O", "ReleaseSafe", f"-femit-bin=build/mc{EXE}",
+        ZIG, "build-exe", "-O", "ReleaseSafe", *cpu_flags, f"-femit-bin=build/mc{EXE}",
         "--dep", "fmt", "--dep", "lint", "--dep", "lsp", "--dep", "runtime", "--dep", "toml", "--dep", "packages",
         f"-Mroot={CLI_SRC}",
         "--dep", "toml", f"-Mfmt={ROOT / 'src' / 'fmt' / 'format.zig'}",
@@ -243,4 +263,10 @@ def build():
 
 
 if __name__ == "__main__":
-    build()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--cpu", default=DEFAULT_CPU,
+        help="Zig -mcpu value (default: native). Use 'baseline' for a portable, "
+             "runs-on-any-CPU binary — required for published artifacts.",
+    )
+    build(parser.parse_args().cpu)
