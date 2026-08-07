@@ -7,6 +7,11 @@ default:
 build:
     python3 scripts/build.py
 
+# Portable build for published artifacts: generic CPU baseline instead of the
+# build machine's native ISA, so the binary runs on any CPU of the target arch.
+build-portable:
+    python3 scripts/build.py --cpu baseline
+
 clean:
     rm -rf build dist .mccache .zig-cache zig-out
 
@@ -58,6 +63,6 @@ update-tinycc:
     mise exec -- zig fetch --save=tinycc https://github.com/nightconcept/tinycc/archive/refs/heads/mc.tar.gz
 
 ci:
-    just build
+    just build-portable
     just test
     just package

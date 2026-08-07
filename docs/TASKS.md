@@ -9,6 +9,11 @@ what happened, not a living description.
 
 ## Done
 
+- [x] Fixed released binaries crashing with SIGILL on CPUs older than the CI
+      runner: `scripts/build.py` gained `--cpu` (default `native`), `just ci`
+      now builds via the new `just build-portable` (`--cpu baseline`), and
+      `just package` refuses a native-CPU build unless
+      `MC_PACKAGE_ALLOW_NATIVE=1`.
 - [x] Ported custom multi-step T1 build recipes in test_legacy.py for tests 148-151 (linker symbols, copy relocations, linker boundaries, DSO symbols) and fixed tool PATH resolution in src/fmt/format.zig.
 - [x] Added 2x weekly scheduled and force-dispatch release workflow on main targeting yyyy.mm.dd-mc-<hash> releases, and removed legacy edge pre-releases.
 - [x] Adopted a PR-gated `main` workflow: added a no-bypass GitHub ruleset
